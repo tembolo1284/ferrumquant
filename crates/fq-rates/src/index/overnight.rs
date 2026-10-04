@@ -131,8 +131,9 @@ impl OvernightIndex {
         }
         let lock = conv.lockout_days.max(0) as usize;
         if lock > 0 && out.len() > lock {
-            let anchor = out[out.len() - lock - 1].observation_date;
-            for p in &mut out[out.len() - lock..] {
+            let n = out.len();
+            let anchor = out[n - lock - 1].observation_date;
+            for p in &mut out[n - lock..] {
                 p.observation_date = anchor;
             }
         }

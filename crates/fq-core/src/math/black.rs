@@ -7,7 +7,7 @@
 //! West, "Better approximations to cumulative normal functions"), accurate to
 //! roughly 1e-14.
 
-use std::f64::consts::{PI, SQRT_2};
+use std::f64::consts::PI;
 
 use thiserror::Error;
 
