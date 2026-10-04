@@ -1,0 +1,39 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/fq-core",   # time, math, market snapshot
+    "crates/fq-rates",  # indices, curves, bonds, futures, swaps, swaptions
+    # "crates/fq-py",   # PyO3 bindings (added later)
+    # "crates/fq-capi", # flat C ABI for Excel/XLL (added later)
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "BSD-3-Clause"
+repository = "https://github.com/tembolo1284/ferrumquant"
+description = "QuantLib-inspired Rust library for pricing and risk across rates, FX, and commodities."
+
+[workspace.dependencies]
+fq-core = { path = "crates/fq-core" }
+fq-rates = { path = "crates/fq-rates" }
+num-traits = "0.2"
+thiserror = "2"
+approx = "0.5"
+
+[workspace.lints.rust]
+unsafe_code = "deny"          # fq-capi will opt out of workspace lints
+missing_debug_implementations = "warn"
+
+[workspace.lints.clippy]
+float_cmp = "warn"
+unwrap_used = "warn"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
+[profile.bench]
+inherits = "release"
+debug = true
