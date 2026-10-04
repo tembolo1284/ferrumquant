@@ -176,7 +176,10 @@ mod tests {
         for &(_, date, df) in &res.nodes {
             assert!(date > last_date);
             assert!(df < last_df && df > 0.0);
-            let fwd = res.curve.forward_rate(last_date, date, DayCount::Act360)?;
+            // Continuously-compounded forward over the gap (simple rates would
+            // balloon on the 20-year 10Y->30Y segment).
+            let dt = f64::from(date - last_date) / 365.0;
+            let fwd = (last_df / df).ln() / dt;
             assert!(fwd > 0.03 && fwd < 0.05, "forward {fwd} over {last_date}..{date}");
             last_date = date;
             last_df = df;

@@ -224,7 +224,10 @@ mod tests {
 
     #[test]
     fn brent_cubic_with_flat_region() -> R {
-        let x = brent(|x| (x - 1.0).powi(3), -3.0, 4.0, CFG)?;
+        // A triple root defeats interpolation, so Brent degrades to bisection
+        // and needs ~145 iterations at this tolerance.
+        let cfg = SolverConfig { tolerance: 1e-14, max_iterations: 200 };
+        let x = brent(|x| (x - 1.0).powi(3), -3.0, 4.0, cfg)?;
         assert_abs_diff_eq!(x, 1.0, epsilon = 1e-4);
         Ok(())
     }
