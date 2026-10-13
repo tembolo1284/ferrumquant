@@ -30,6 +30,7 @@ product_target() {
 	imm)          echo "fq-core time::imm::" ;;
         deposit)      echo "fq-rates instrument::deposit::" ;;
         sofr-future)  echo "fq-rates future::sofr_future::" ;;
+	spread)       echo "fq-rates bond::spread::" ;;
         golden)       echo "fq-rates golden_" ;;
         curve)        echo "fq-rates curve::" ;;
 	jacobian)     echo "fq-rates curve::jacobian::" ;;
