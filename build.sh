@@ -14,26 +14,29 @@ PRODUCTS_ALL="date daycount calendar schedule time solver black core bond future
 
 product_target() {
     case "$1" in
-        date)       echo "fq-core time::date::" ;;
-        daycount)   echo "fq-core time::daycount::" ;;
-        calendar)   echo "fq-core time::calendar::" ;;
-        schedule)   echo "fq-core time::schedule::" ;;
-	period)     echo "fq-core time::period::" ;;
-        time)       echo "fq-core time::" ;;
-        solver)     echo "fq-core math::solver::" ;;
-        black)      echo "fq-core math::black::" ;;
-        core)       echo "fq-core -" ;;
-        bond)       echo "fq-rates bond::" ;;
-        future)     echo "fq-rates future::" ;;
-        swap)       echo "fq-rates swap::" ;;
-        swaption)   echo "fq-rates swaption::" ;;
-        golden)     echo "fq-rates golden_" ;;
-        curve)      echo "fq-rates curve::" ;;
-	jacobian)   echo "fq-rates curve::jacobian::" ;;
-        index)      echo "fq-rates index::" ;;
-        rates)      echo "fq-rates -" ;;
-        fx-barrier) echo "fq-fx barrier::" ;;
-        *)          return 1 ;;
+        date)         echo "fq-core time::date::" ;;
+        daycount)     echo "fq-core time::daycount::" ;;
+        calendar)     echo "fq-core time::calendar::" ;;
+        schedule)     echo "fq-core time::schedule::" ;;
+	period)       echo "fq-core time::period::" ;;
+        time)         echo "fq-core time::" ;;
+        solver)       echo "fq-core math::solver::" ;;
+        black)        echo "fq-core math::black::" ;;
+        core)         echo "fq-core -" ;;
+        bond)         echo "fq-rates bond::" ;;
+        future)       echo "fq-rates future::" ;;
+        swap)         echo "fq-rates swap::" ;;
+        swaption)     echo "fq-rates swaption::" ;;
+	imm)          echo "fq-core time::imm::" ;;
+        deposit)      echo "fq-rates instrument::deposit::" ;;
+        sofr-future)  echo "fq-rates future::sofr_future::" ;;
+        golden)       echo "fq-rates golden_" ;;
+        curve)        echo "fq-rates curve::" ;;
+	jacobian)     echo "fq-rates curve::jacobian::" ;;
+        index)        echo "fq-rates index::" ;;
+        rates)        echo "fq-rates -" ;;
+        fx-barrier)   echo "fq-fx barrier::" ;;
+        *)            return 1 ;;
     esac
 }
 

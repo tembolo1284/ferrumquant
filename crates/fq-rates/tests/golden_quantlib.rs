@@ -11,7 +11,7 @@
 
 use approx::assert_abs_diff_eq;
 
-use fq_core::time::Date;
+use fq_core::time::{Date, Period};
 use fq_rates::bond::FixedRateBond;
 use fq_rates::curve::{BootstrapConfig, BootstrapInstrument, DiscountCurve, bootstrap_sofr};
 use fq_rates::index::OvernightIndex;
@@ -168,6 +168,39 @@ fn golden_sofr_bootstrap_nodes() -> R {
         (d(2033, 9, 28), 0.763_942_250_620_560),
         (d(2036, 9, 29), 0.673_230_136_979_227),
         (d(2056, 9, 27), 0.290_190_167_335_056),
+    ];
+    assert_eq!(res.nodes.len(), expected.len());
+    for ((_, date, df), (want_date, want_df)) in res.nodes.iter().zip(expected) {
+        assert_eq!(*date, want_date);
+        assert_abs_diff_eq!(*df, want_df, epsilon = 1e-10);
+    }
+    Ok(())
+}
+
+#[test]
+fn golden_mixed_bootstrap_deposit_futures_swaps() -> R {
+    // DepositRateHelper(1D, fixingDays 0) + SofrFutureRateHelper(Quarterly,
+    // convexity 2bp) + OISRateHelper, PiecewiseLogLinearDiscount, 2026-10-13.
+    let today = d(2026, 10, 13);
+    let mut quotes = vec![BootstrapInstrument::deposit(Period::days(1), 0.0432)];
+    for (c, p) in [("Z26", 95.78), ("H27", 95.95), ("M27", 96.10), ("U27", 96.20)] {
+        quotes.push(BootstrapInstrument::sofr_future(c.parse()?, p, 0.0002));
+    }
+    for (t, r) in [("2Y", 0.0380), ("3Y", 0.0375), ("5Y", 0.0378), ("10Y", 0.0395)] {
+        quotes.push(BootstrapInstrument::ois(t.parse()?, r));
+    }
+    let res = bootstrap_sofr(today, &OvernightIndex::sofr(), &quotes, BootstrapConfig::default())?;
+
+    let expected = [
+        (d(2026, 10, 14), 0.999_880_014_398_272),
+        (d(2027, 3, 17), 0.982_168_932_784_084),
+        (d(2027, 6, 16), 0.972_264_528_051_517),
+        (d(2027, 9, 15), 0.962_821_389_820_452),
+        (d(2027, 12, 15), 0.953_708_703_161_719),
+        (d(2028, 10, 18), 0.926_704_963_455_314),
+        (d(2029, 10, 17), 0.893_763_702_619_244),
+        (d(2031, 10, 17), 0.828_194_858_228_725),
+        (d(2036, 10, 17), 0.673_562_758_746_264),
     ];
     assert_eq!(res.nodes.len(), expected.len());
     for ((_, date, df), (want_date, want_df)) in res.nodes.iter().zip(expected) {

@@ -4,6 +4,7 @@ pub mod bond;
 pub mod curve;
 pub mod future;
 pub mod index;
+pub mod instrument;
 pub mod swap;
 pub mod swaption;
 

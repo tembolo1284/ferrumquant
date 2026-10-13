@@ -16,16 +16,14 @@
 
 use fq_core::time::Date;
 
-use crate::swap::Tenor;
-
-use crate::curve::{BootstrapConfig, BootstrapError, BootstrapInstrument, BootstrapResult, CurveError, DiscountCurve, bootstrap_sofr};
+use crate::curve::{BootstrapConfig, BootstrapError, BootstrapInstrument, BootstrapResult, CurveError, DiscountCurve, InstrumentKey, bootstrap_sofr};
 use crate::index::OvernightIndex;
 
 /// Bumped-quote sensitivities of a bootstrapped curve.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CurveJacobian {
-    /// Tenor of each input quote, in node order.
-    pub tenors: Vec<Tenor>,
+    /// Key of each input quote, in node order.
+    pub keys: Vec<InstrumentKey>,
     /// `matrix[i][j]` = change in node `i`'s zero rate per unit change in quote `j`.
     pub matrix: Vec<Vec<f64>>,
     /// Quote bump used to build the Jacobian (rate units, e.g. 1e-4).
@@ -34,7 +32,7 @@ pub struct CurveJacobian {
 
 impl CurveJacobian {
     pub fn node_count(&self) -> usize {
-        self.tenors.len()
+        self.keys.len()
     }
 
     /// Convert a zero-rate bucket ladder (`dPV/dzero_i`, one per node) into
@@ -59,14 +57,11 @@ pub fn bootstrap_sofr_with_jacobian(
 ) -> Result<(BootstrapResult, CurveJacobian), BootstrapError> {
     let base = bootstrap_sofr(trade_date, index, instruments, config)?;
     let n = base.nodes.len();
-    let tenors: Vec<Tenor> = base.nodes.iter().map(|(t, _, _)| *t).collect();
+    let keys = base.keys();
 
-    // Instruments in node order so column j lines up with tenors[j].
+    // Instruments in node order so column j lines up with keys[j].
     let mut ordered: Vec<BootstrapInstrument> = instruments.to_vec();
-    ordered.sort_by_key(|inst| {
-        let BootstrapInstrument::Ois { tenor, .. } = inst;
-        tenors.iter().position(|t| t == tenor).unwrap_or(usize::MAX)
-    });
+    ordered.sort_by_key(|inst| keys.iter().position(|k| *k == inst.key()).unwrap_or(usize::MAX));
 
     let mut matrix = vec![vec![0.0; n]; n];
     for j in 0..n {
@@ -76,18 +71,11 @@ pub fn bootstrap_sofr_with_jacobian(
             row[j] = (up.curve.node_zero_rate(i)? - down.curve.node_zero_rate(i)?) / (2.0 * bump);
         }
     }
-    Ok((base, CurveJacobian { tenors, matrix, bump }))
+    Ok((base, CurveJacobian { keys, matrix, bump }))
 }
 
 fn bumped(instruments: &[BootstrapInstrument], j: usize, shift: f64) -> Vec<BootstrapInstrument> {
-    instruments
-        .iter()
-        .enumerate()
-        .map(|(k, inst)| match *inst {
-            BootstrapInstrument::Ois { tenor, rate } if k == j => BootstrapInstrument::Ois { tenor, rate: rate + shift },
-            other => other,
-        })
-        .collect()
+    instruments.iter().enumerate().map(|(k, inst)| if k == j { inst.bumped(shift) } else { *inst }).collect()
 }
 
 /// Zero-rate bucket ladder for any pricer: `dPV/dzero_i` by central
@@ -113,7 +101,7 @@ mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
 
-    use crate::swap::{OisSwap, SwapSide};
+    use crate::swap::{OisSwap, SwapSide, Tenor};
 
     type R = Result<(), Box<dyn std::error::Error>>;
 
@@ -159,11 +147,11 @@ mod tests {
         let zero = zero_bucket_ladder(&res.curve, 1e-4, |c| swap.npv(&index, c))?;
         let par = jac.to_par_ladder(&zero)?;
         let annuity = swap.value(&index, &res.curve, &res.curve)?.annuity;
-        for (j, tenor) in jac.tenors.iter().enumerate() {
-            if *tenor == Tenor::years(5) {
+        for (j, key) in jac.keys.iter().enumerate() {
+            if *key == InstrumentKey::Ois(Tenor::years(5)) {
                 assert_abs_diff_eq!(par[j], annuity, epsilon = 0.02 * annuity);
             } else {
-                assert!(par[j].abs() < 0.01 * annuity, "{tenor}: {}", par[j]);
+                assert!(par[j].abs() < 0.01 * annuity, "{key}: {}", par[j]);
             }
         }
         // Direct check: bump the 5Y quote, re-bootstrap, reprice.
