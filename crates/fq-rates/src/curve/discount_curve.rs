@@ -25,6 +25,8 @@ pub enum CurveError {
     NonPositiveDiscount { node: Date, df: f64 },
     #[error("date {0} is before the curve reference date")]
     BeforeReference(Date),
+    #[error("node index {index} out of range for a curve with {nodes} nodes")]
+    NodeOutOfRange { index: usize, nodes: usize },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -72,6 +74,12 @@ impl DiscountCurve {
         Ok(Self { reference, dates, times, log_dfs, interpolation })
     }
 
+    /// Build from continuously-compounded ACT/365F zero rates at dated nodes.
+    pub fn from_zero_rates(reference: Date, nodes: &[(Date, f64)], interpolation: Interpolation) -> Result<Self, CurveError> {
+        let dfs: Vec<(Date, f64)> = nodes.iter().map(|&(d, z)| (d, (-z * year_fraction(reference, d)).exp())).collect();
+        Self::new(reference, &dfs, interpolation)
+    }
+
     /// Flat continuously-compounded curve, handy for tests and as a bootstrap seed.
     pub fn flat(reference: Date, rate: f64, horizon: Date) -> Result<Self, CurveError> {
         let t = year_fraction(reference, horizon);
@@ -85,6 +93,23 @@ impl DiscountCurve {
     pub fn interpolation(&self) -> Interpolation {
         self.interpolation
     }
+
+    /// Number of nodes, excluding the implicit reference node.
+    pub fn node_count(&self) -> usize {
+        self.dates.len() - 1
+    }
+
+    /// Date of node `i` (0-based, excluding the reference node).
+    pub fn node_date(&self, i: usize) -> Result<Date, CurveError> {
+        self.dates.get(i + 1).copied().ok_or(CurveError::NodeOutOfRange { index: i, nodes: self.node_count() })
+    }
+
+    /// Continuously-compounded zero rate at node `i`.
+    pub fn node_zero_rate(&self, i: usize) -> Result<f64, CurveError> {
+        let l = self.log_dfs.get(i + 1).ok_or(CurveError::NodeOutOfRange { index: i, nodes: self.node_count() })?;
+        Ok(-l / self.times[i + 1])
+    }
+
 
     /// Node (date, DF) pairs, excluding the implicit reference node.
     pub fn nodes(&self) -> Vec<(Date, f64)> {
@@ -137,8 +162,9 @@ impl DiscountCurve {
     /// shifted in zero-rate terms; for bucketed risk.
     pub fn with_node_shift(&self, i: usize, shift: f64) -> Result<Self, CurveError> {
         let mut c = self.clone();
+        let nodes = self.node_count();
         let Some(l) = c.log_dfs.get_mut(i + 1) else {
-            return Err(CurveError::EmptyNodes);
+            return Err(CurveError::NodeOutOfRange { index: i, nodes });
         };
         *l -= shift * self.times[i + 1];
         Ok(c)
@@ -238,6 +264,12 @@ mod tests {
         let up = c.shifted(1e-4);
         let date = d(2028, 3, 23);
         assert_abs_diff_eq!(up.zero_rate(date)?, c.zero_rate(date)? + 1e-4, epsilon = 1e-12);
+        assert_eq!(c.node_count(), 2);
+        assert_eq!(c.node_date(1)?, d(2028, 9, 22));
+        assert_abs_diff_eq!(c.node_zero_rate(1)?, c.zero_rate(d(2028, 9, 22))?, epsilon = 1e-15);
+        assert!(matches!(c.with_node_shift(2, 1e-4), Err(CurveError::NodeOutOfRange { index: 2, nodes: 2 })));
+        let rebuilt = DiscountCurve::from_zero_rates(r, &[(d(2027, 9, 23), c.node_zero_rate(0)?), (d(2028, 9, 22), c.node_zero_rate(1)?)], Interpolation::LogLinearDiscount)?;
+        assert_abs_diff_eq!(rebuilt.discount(date)?, c.discount(date)?, epsilon = 1e-15);
         let bucket = c.with_node_shift(1, 1e-4)?;
         assert_abs_diff_eq!(bucket.discount(d(2027, 9, 23))?, 0.96, epsilon = 1e-15);
         assert_abs_diff_eq!(bucket.zero_rate(d(2028, 9, 22))?, c.zero_rate(d(2028, 9, 22))? + 1e-4, epsilon = 1e-12);

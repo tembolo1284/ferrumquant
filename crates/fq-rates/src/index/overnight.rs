@@ -141,7 +141,28 @@ impl OvernightIndex {
     }
 
     /// Compounding factor prod(1 + r_i * days_i / basis) over [start, end).
+    ///
+    /// Fast path: for plain compounding over a period that is entirely
+    /// projected from the curve (no stored fixings in range, start on or
+    /// after the curve reference date) with both ends on fixing-calendar
+    /// business days, the daily product of simple forwards telescopes to
+    /// `DF(start) / DF(end)`, so no day-by-day walk is needed. Every
+    /// `OisSwap` period satisfies the business-day condition because its
+    /// accrual dates are adjusted on a calendar that is a superset of the
+    /// fixing calendar; a swap on a calendar that is not a superset must
+    /// not rely on this.
     pub fn compounded_factor(&self, start: Date, end: Date, curve: Option<&DiscountCurve>, conv: CompoundingConvention) -> Result<f64, IndexError> {
+        if end <= start {
+            return Err(IndexError::EmptyPeriod { start, end });
+        }
+        if let Some(df_ratio) = self.telescoped(start, end, curve, conv)? {
+            return Ok(df_ratio);
+        }
+        self.compounded_factor_slow(start, end, curve, conv)
+    }
+
+    /// Day-by-day compounding with no fast path; for tests and audits.
+    pub fn compounded_factor_slow(&self, start: Date, end: Date, curve: Option<&DiscountCurve>, conv: CompoundingConvention) -> Result<f64, IndexError> {
         let mut factor = 1.0;
         for p in self.observation_periods(start, end, conv)? {
             let r = self.rate_on(p.observation_date, curve)?;
@@ -149,6 +170,23 @@ impl OvernightIndex {
             factor *= 1.0 + r * yf;
         }
         Ok(factor)
+    }
+
+    /// `Some(DF(start)/DF(end))` when the telescoping conditions hold.
+    fn telescoped(&self, start: Date, end: Date, curve: Option<&DiscountCurve>, conv: CompoundingConvention) -> Result<Option<f64>, IndexError> {
+        if conv != CompoundingConvention::default() {
+            return Ok(None);
+        }
+        let Some(c) = curve else { return Ok(None) };
+        let cal = &self.fixing_calendar;
+        if start < c.reference_date()
+            || !cal.is_business_day(start)
+            || !cal.is_business_day(end)
+            || self.fixings.range(start..end).next().is_some()
+        {
+            return Ok(None);
+        }
+        Ok(Some(c.discount(start)? / c.discount(end)?))
     }
 
     /// Annualised compounded rate over [start, end) in the index day count.
@@ -254,6 +292,55 @@ mod tests {
         // Compounding daily simple forwards telescopes to DF(s)/DF(e).
         let expected = (curve.discount(s)? / curve.discount(e)? - 1.0) * 360.0 / f64::from(e - s);
         assert_abs_diff_eq!(idx.compounded_rate(s, e, Some(&curve), CompoundingConvention::default())?, expected, epsilon = 1e-13);
+        Ok(())
+    }
+
+    #[test]
+    fn fast_path_matches_day_by_day() -> R {
+        let idx = OvernightIndex::sofr();
+        let today = d(2026, 9, 23);
+        let curve = DiscountCurve::new(
+            today,
+            &[(d(2027, 9, 23), 0.96), (d(2031, 9, 23), 0.82), (d(2056, 9, 23), 0.30)],
+            crate::curve::Interpolation::LogLinearDiscount,
+        )?;
+        let conv = CompoundingConvention::default();
+        for (s, e) in [(d(2026, 9, 25), d(2026, 10, 26)), (d(2026, 9, 25), d(2027, 9, 27)), (d(2055, 9, 27), d(2056, 9, 25))] {
+            let fast = idx.compounded_factor(s, e, Some(&curve), conv)?;
+            let slow = idx.compounded_factor_slow(s, e, Some(&curve), conv)?;
+            assert_abs_diff_eq!(fast, slow, epsilon = 1e-13);
+            assert_abs_diff_eq!(fast, curve.discount(s)? / curve.discount(e)?, epsilon = 1e-15);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn fast_path_declines_when_conditions_fail() -> R {
+        let mut idx = OvernightIndex::sofr();
+        let today = d(2026, 9, 23);
+        let curve = DiscountCurve::flat(today, 0.04, d(2030, 9, 23))?;
+        let (s, e) = (d(2026, 9, 25), d(2027, 9, 27));
+        let plain = CompoundingConvention::default();
+        // Lookback or lockout: slow path, and the result differs from DF ratio.
+        for conv in [
+            CompoundingConvention { lookback_days: 2, ..Default::default() },
+            CompoundingConvention { lockout_days: 2, ..Default::default() },
+        ] {
+            assert!(idx.telescoped(s, e, Some(&curve), conv)?.is_none());
+            assert_abs_diff_eq!(idx.compounded_factor(s, e, Some(&curve), conv)?, idx.compounded_factor_slow(s, e, Some(&curve), conv)?, epsilon = 1e-15);
+        }
+        // A non-business-day end (Saturday) must not telescope.
+        assert!(idx.telescoped(s, d(2027, 9, 25), Some(&curve), plain)?.is_none());
+        // One stored fixing inside the period forces the slow path and changes the value.
+        idx.add_fixing(d(2026, 10, 1), 0.06);
+        assert!(idx.telescoped(s, e, Some(&curve), plain)?.is_none());
+        let with_fixing = idx.compounded_factor(s, e, Some(&curve), plain)?;
+        assert_abs_diff_eq!(with_fixing, idx.compounded_factor_slow(s, e, Some(&curve), plain)?, epsilon = 1e-15);
+        assert!(with_fixing > curve.discount(s)? / curve.discount(e)?);
+        // A fixing outside the period does not block it.
+        let mut idx2 = OvernightIndex::sofr();
+        idx2.add_fixing(d(2026, 9, 24), 0.05);
+        assert!(idx2.telescoped(s, e, Some(&curve), plain)?.is_some());
         Ok(())
     }
 

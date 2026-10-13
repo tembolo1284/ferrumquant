@@ -28,6 +28,7 @@ product_target() {
         swaption)   echo "fq-rates swaption::" ;;
         golden)     echo "fq-rates golden_" ;;
         curve)      echo "fq-rates curve::" ;;
+	jacobian)   echo "fq-rates curve::jacobian::" ;;
         index)      echo "fq-rates index::" ;;
         rates)      echo "fq-rates -" ;;
         fx-barrier) echo "fq-fx barrier::" ;;

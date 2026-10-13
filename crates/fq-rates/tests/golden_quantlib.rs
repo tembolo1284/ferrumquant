@@ -1,3 +1,5 @@
+#![allow(clippy::excessive_precision)] // reference values pasted verbatim from tools/quantlib_golden.py
+
 //! Golden tests against QuantLib-Python 1.43.
 //!
 //! Reference values come from `tools/quantlib_golden.py`; regenerate and
@@ -103,7 +105,7 @@ fn golden_ois_5y_payer_legs() -> R {
     assert_abs_diff_eq!(v.fixed_leg_pv, 180_136.280_383_079_546, epsilon = 1e-6);
     assert_abs_diff_eq!(v.float_leg_pv, 181_272.164_934_023_633, epsilon = 1e-6);
 
-    let fixed: Vec<f64> = s.fixed_cashflows()?.iter().map(|c| c.amount).collect();
+    let fixed: Vec<f64> = s.fixed_cashflows().iter().map(|c| c.amount).collect();
     let expected_fixed = [40_777.777_777_777_803, 40_444.444_444_444_503, 40_555.555_555_555_453, 40_555.555_555_555_453, 40_555.555_555_555_453];
     let float: Vec<f64> = s.float_cashflows(&index, &curve)?.iter().map(|c| c.amount).collect();
     let expected_float = [41_038.922_103_397_766, 40_696.718_987_396_576, 40_810.774_192_388_213, 40_810.774_192_388_213, 40_810.774_192_388_213];

@@ -84,7 +84,7 @@ pub fn bootstrap_sofr(
         match *inst {
             BootstrapInstrument::Ois { tenor, rate } => {
                 let swap = OisSwap::usd_sofr_spot(trade_date, tenor, SwapSide::ReceiveFixed, 1.0, rate)?;
-                let node = final_payment(&swap)?;
+                let node = swap.final_payment_date();
                 swaps.push((tenor, swap, node));
             }
         }
@@ -123,10 +123,6 @@ pub fn bootstrap_sofr(
 
     let curve = DiscountCurve::new(trade_date, &nodes, config.interpolation)?;
     Ok(BootstrapResult { curve, swaps: swaps.into_iter().map(|(_, s, _)| s).collect(), nodes: out_nodes })
-}
-
-fn final_payment(swap: &OisSwap) -> Result<Date, SwapError> {
-    Ok(swap.periods()?.last().map(|p| p.2).expect("schedule has at least one period"))
 }
 
 #[cfg(test)]

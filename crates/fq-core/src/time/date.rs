@@ -104,6 +104,15 @@ impl Date {
         self.0
     }
 
+    /// Days since 1970-01-01 (the Unix epoch), as used by many feeds and by riskrt.
+    pub fn from_unix_days(days: i32) -> Result<Self, DateError> {
+        Self::from_serial(days.checked_add(UNIX_EPOCH_SERIAL).ok_or(DateError::OutOfRange)?)
+    }
+
+    pub const fn unix_days(self) -> i32 {
+        self.0 - UNIX_EPOCH_SERIAL
+    }
+
     pub fn ymd(self) -> (i32, u32, u32) {
         civil_from_days(self.0 - UNIX_EPOCH_SERIAL)
     }
@@ -298,6 +307,16 @@ mod tests {
         }
         Ok(())
     }
+
+    #[test]
+    fn unix_days_round_trip() -> R {
+        assert_eq!(Date::from_unix_days(0)?, Date::from_ymd(1970, 1, 1)?);
+        assert_eq!(Date::from_ymd(2026, 10, 13)?.unix_days(), 20_739);
+        assert_eq!(Date::from_unix_days(20_739)?.ymd(), (2026, 10, 13));
+        assert_eq!(Date::from_unix_days(i32::MAX), Err(DateError::OutOfRange));
+        Ok(())
+    }
+
 
     #[test]
     fn weekdays() -> R {

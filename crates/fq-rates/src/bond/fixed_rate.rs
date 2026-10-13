@@ -14,6 +14,8 @@ use fq_core::time::{
     RefPeriod, Schedule, ScheduleError, ScheduleSpec,
 };
 
+use crate::curve::{CurveError, DiscountCurve};
+
 #[derive(Debug, Error, Clone, PartialEq)]
 pub enum BondError {
     #[error(transparent)]
@@ -24,6 +26,8 @@ pub enum BondError {
     Date(#[from] DateError),
     #[error(transparent)]
     Solver(#[from] SolverError),
+    #[error(transparent)]
+    Curve(#[from] CurveError),
     #[error("settlement {settle} outside the bond's life ({start}..{maturity})")]
     SettlementOutOfRange { settle: Date, start: Date, maturity: Date },
     #[error("invalid price quote '{0}'")]
@@ -49,7 +53,9 @@ pub struct YieldAnalytics {
     pub macaulay_duration: f64,
     pub modified_duration: f64,
     pub convexity: f64,
-    /// Dirty-price change for a 1bp fall in yield.
+    /// Dirty-price change for a 1bp *fall* in yield (the bond-market sign:
+    /// positive for a long). The curve-based `FixedRateBond::dv01` uses the
+    /// opposite convention (PV change for a +1bp curve shift).
     pub dv01: f64,
 }
 
@@ -189,6 +195,30 @@ impl FixedRateBond {
             SolverConfig::default(),
         )?;
         Ok(y)
+    }
+
+    /// Dirty PV per `face` at the curve's reference date: coupons discounted
+    /// to their (adjusted) payment dates plus redemption at `redemption_date`.
+    /// Cashflows paying on or before the reference date are settled.
+    pub fn npv(&self, curve: &DiscountCurve) -> Result<f64, BondError> {
+        let today = curve.reference_date();
+        let mut pv = 0.0;
+        for c in self.coupons.iter().filter(|c| c.payment_date > today) {
+            pv += c.amount * curve.discount(c.payment_date)?;
+        }
+        if self.redemption_date > today {
+            pv += self.face * curve.discount(self.redemption_date)?;
+        }
+        Ok(pv)
+    }
+
+    /// Curve-based DV01 per `face`: PV change for a +1bp parallel shift of
+    /// the zero curve (central difference), same convention as
+    /// `OisSwap::dv01`. Negative for a long bond.
+    pub fn dv01(&self, curve: &DiscountCurve) -> Result<f64, BondError> {
+        let up = self.npv(&curve.shifted(1e-4))?;
+        let down = self.npv(&curve.shifted(-1e-4))?;
+        Ok(0.5 * (up - down))
     }
 
     pub fn analytics(&self, yield_rate: f64, settle: Date) -> Result<YieldAnalytics, BondError> {
@@ -388,6 +418,41 @@ mod tests {
         assert_abs_diff_eq!(a.convexity, (up + dn - 2.0 * a.dirty_price) / (h * h * a.dirty_price), epsilon = 1e-2);
         assert_abs_diff_eq!(a.dv01, a.modified_duration * a.dirty_price * 1e-4, epsilon = 1e-12);
         assert_abs_diff_eq!(a.macaulay_duration, a.modified_duration * (1.0 + y / 2.0), epsilon = 1e-10);
+        Ok(())
+    }
+
+    #[test]
+    fn curve_npv_matches_hand_sum_and_drops_settled_flows() -> R {
+        let b = ten_year(0.0425)?;
+        let today = d(2026, 9, 23);
+        let curve = DiscountCurve::flat(today, 0.04, d(2040, 1, 1))?;
+        let mut expected = 0.0;
+        for c in b.coupons() {
+            expected += c.amount * curve.discount(c.payment_date)?;
+        }
+        expected += 100.0 * curve.discount(b.redemption_date())?;
+        assert_abs_diff_eq!(b.npv(&curve)?, expected, epsilon = 1e-12);
+        assert_eq!(b.coupons().iter().filter(|c| c.payment_date > today).count(), 20);
+        // Move the reference past the first coupon: 19 coupons remain.
+        let later = DiscountCurve::flat(d(2027, 2, 16), 0.04, d(2040, 1, 1))?;
+        let mut expected = 0.0;
+        for c in b.coupons().iter().skip(1) {
+            expected += c.amount * later.discount(c.payment_date)?;
+        }
+        expected += 100.0 * later.discount(b.redemption_date())?;
+        assert_abs_diff_eq!(b.npv(&later)?, expected, epsilon = 1e-12);
+        Ok(())
+    }
+
+    #[test]
+    fn curve_dv01_is_negative_and_near_duration_estimate() -> R {
+        let b = ten_year(0.0425)?;
+        let curve = DiscountCurve::flat(d(2026, 9, 23), 0.04, d(2040, 1, 1))?;
+        let pv = b.npv(&curve)?;
+        let dv01 = b.dv01(&curve)?;
+        assert!(dv01 < 0.0);
+        // Roughly -PV * Macaulay duration * 1bp for a flat cc curve (~8y).
+        assert!(dv01 > -pv * 9.0 * 1e-4 && dv01 < -pv * 7.0 * 1e-4, "dv01 {dv01} pv {pv}");
         Ok(())
     }
 
