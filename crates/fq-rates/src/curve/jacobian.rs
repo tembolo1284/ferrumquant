@@ -16,9 +16,10 @@
 
 use fq_core::time::Date;
 
+use crate::swap::Tenor;
+
 use crate::curve::{BootstrapConfig, BootstrapError, BootstrapInstrument, BootstrapResult, CurveError, DiscountCurve, bootstrap_sofr};
 use crate::index::OvernightIndex;
-use crate::swap::Tenor;
 
 /// Bumped-quote sensitivities of a bootstrapped curve.
 #[derive(Debug, Clone, PartialEq)]

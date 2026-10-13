@@ -21,6 +21,8 @@ pub enum BootstrapError {
     Swap(#[from] SwapError),
     #[error(transparent)]
     Curve(#[from] CurveError),
+    #[error(transparent)]
+    Period(#[from] fq_core::time::PeriodError),
     #[error("solving node {node} ({tenor}): {source}")]
     Solver { tenor: Tenor, node: Date, source: SolverError },
     #[error("no instruments given")]

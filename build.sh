@@ -18,6 +18,7 @@ product_target() {
         daycount)   echo "fq-core time::daycount::" ;;
         calendar)   echo "fq-core time::calendar::" ;;
         schedule)   echo "fq-core time::schedule::" ;;
+	period)     echo "fq-core time::period::" ;;
         time)       echo "fq-core time::" ;;
         solver)     echo "fq-core math::solver::" ;;
         black)      echo "fq-core math::black::" ;;

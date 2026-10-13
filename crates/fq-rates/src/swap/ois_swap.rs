@@ -7,14 +7,13 @@
 //! works when discounting moves off the projection curve; for USD SOFR they
 //! are the same curve.
 
-use std::fmt;
-use std::str::FromStr;
+pub type Tenor = Period;
 
 use thiserror::Error;
 
 use fq_core::time::{
     BusinessDayConvention, Calendar, Date, DateError, DayCount, DayCountError, Frequency, JoinRule,
-    Market, Schedule, ScheduleError, ScheduleSpec,
+    Market, Period, PeriodError, Schedule, ScheduleError, ScheduleSpec,
 };
 
 use crate::curve::{CurveError, DiscountCurve};
@@ -32,55 +31,10 @@ pub enum SwapError {
     Curve(#[from] CurveError),
     #[error(transparent)]
     Index(#[from] IndexError),
-    #[error("invalid tenor '{0}' (expected e.g. 6M, 18M, 5Y)")]
-    InvalidTenor(String),
+    #[error(transparent)]
+    Period(#[from] PeriodError),
     #[error("swap has no unpaid cashflows as of {0}")]
     Expired(Date),
-}
-
-/// A month-based tenor (weeks/days come later with the deposit instruments).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct Tenor {
-    months: i32,
-}
-
-impl Tenor {
-    pub const fn months(months: i32) -> Self {
-        Self { months }
-    }
-
-    pub const fn years(years: i32) -> Self {
-        Self { months: years * 12 }
-    }
-
-    pub const fn in_months(self) -> i32 {
-        self.months
-    }
-
-    pub fn add_to(self, d: Date) -> Result<Date, DateError> {
-        d.add_months(self.months)
-    }
-}
-
-impl fmt::Display for Tenor {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if self.months % 12 == 0 { write!(f, "{}Y", self.months / 12) } else { write!(f, "{}M", self.months) }
-    }
-}
-
-impl FromStr for Tenor {
-    type Err = SwapError;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let t = s.trim().to_ascii_uppercase();
-        let bad = || SwapError::InvalidTenor(s.to_owned());
-        let (num, unit) = t.split_at(t.len().checked_sub(1).ok_or_else(bad)?);
-        let n: i32 = num.parse().map_err(|_| bad())?;
-        match unit {
-            "Y" => Ok(Self::years(n)),
-            "M" => Ok(Self::months(n)),
-            _ => Err(bad()),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -413,13 +367,15 @@ mod tests {
     }
 
     #[test]
-    fn tenor_parsing() -> R {
-        assert_eq!("5y".parse::<Tenor>()?, Tenor::years(5));
-        assert_eq!("18M".parse::<Tenor>()?, Tenor::months(18));
-        assert_eq!(Tenor::months(24).to_string(), "2Y");
-        assert_eq!(Tenor::months(6).to_string(), "6M");
-        assert!("1W".parse::<Tenor>().is_err());
-        assert!("".parse::<Tenor>().is_err());
+    fn short_tenors_build_valid_swaps() -> R {
+        let (today, index, curve) = setup();
+        let s = OisSwap::usd_sofr_spot(today, "1W".parse::<Tenor>()?, SwapSide::PayFixed, 1e6, 0.04)?;
+        assert_eq!(s.effective_date(), d(2026, 9, 25));
+        assert_eq!(s.maturity_date(), d(2026, 10, 2));
+        assert_eq!(s.periods().len(), 1);
+        let v = s.value(&index, &curve, &curve)?;
+        assert!(v.par_rate > 0.039 && v.par_rate < 0.041);
+        assert!(matches!("".parse::<Tenor>(), Err(PeriodError::Parse(_))));
         Ok(())
     }
 }
