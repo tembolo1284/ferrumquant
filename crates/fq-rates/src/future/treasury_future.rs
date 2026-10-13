@@ -128,6 +128,15 @@ impl TreasuryFuture {
         Ok(futures_price * d.conversion_factor + d.bond.accrued(delivery_date)?)
     }
 
+    /// Forward clean price of deliverable `index` at `delivery_date`: dirty
+    /// price financed at `repo` (ACT/360) with intervening coupons reinvested
+    /// at repo, less accrued at delivery.
+    pub fn forward_clean_price(&self, index: usize, clean_price: f64, settle: Date, delivery_date: Date, repo: f64) -> Result<f64, FutureError> {
+        let d = self.deliverable(index)?;
+        let terms = carry_terms(&d.bond, clean_price, settle, delivery_date)?;
+        Ok(forward_clean(&terms, repo))
+    }
+
     pub fn basis(
         &self,
         index: usize,

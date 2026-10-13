@@ -29,6 +29,7 @@ product_target() {
         swaption)     echo "fq-rates swaption::" ;;
 	imm)          echo "fq-core time::imm::" ;;
         deposit)      echo "fq-rates instrument::deposit::" ;;
+	delivery)     echo "fq-rates future::delivery_option::" ;;
         sofr-future)  echo "fq-rates future::sofr_future::" ;;
 	spread)       echo "fq-rates bond::spread::" ;;
         golden)       echo "fq-rates golden_" ;;
