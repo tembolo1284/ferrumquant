@@ -27,6 +27,10 @@ product_target() {
         future)       echo "fq-rates future::" ;;
         swap)         echo "fq-rates swap::" ;;
         swaption)     echo "fq-rates swaption::" ;;
+        interp)     echo "fq-core math::interpolation::" ;;
+        sabr)       echo "fq-core math::sabr::" ;;
+        volcube)    echo "fq-rates swaption::vol_cube::" ;;
+        capfloor)   echo "fq-rates capfloor::" ;;
 	imm)          echo "fq-core time::imm::" ;;
         deposit)      echo "fq-rates instrument::deposit::" ;;
 	delivery)     echo "fq-rates future::delivery_option::" ;;

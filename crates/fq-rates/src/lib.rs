@@ -7,6 +7,8 @@ pub mod index;
 pub mod instrument;
 pub mod swap;
 pub mod swaption;
+pub mod capfloor;
+
 
 // Everything a risk engine shares across threads must stay plain owned data
 // (no Rc/RefCell/Cell). This fails to compile if that ever changes.
@@ -18,4 +20,6 @@ const _: () = {
     assert_shareable::<bond::FixedRateBond>();
     assert_shareable::<future::TreasuryFuture>();
     assert_shareable::<swaption::Swaption>();
+    assert_shareable::<swaption::SwaptionVolCube>();
+    assert_shareable::<capfloor::CapFloor>();
 };
