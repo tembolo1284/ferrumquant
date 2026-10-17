@@ -262,14 +262,16 @@ mod tests {
         let n = c.node(0, 1);
         assert_abs_diff_eq!(c.normal_vol(e1, Period::years(5), n.forward, n.forward)?, n.atm_vol, epsilon = 1e-12);
         assert_abs_diff_eq!(c.normal_vol(e1, Period::years(5), n.forward, n.forward + 0.01)?, n.sabr.normal_vol(n.forward, n.forward + 0.01, 1.0), epsilon = 1e-10);
-        // Halfway in expiry between 1Y and 5Y: ATM is the average of the nodes.
+        // Tenor axis in the cube's own ACT/365F years (5Y is 1826 days, not 5.0).
+        let ty5 = f64::from(Period::years(5).add_to(reference)? - reference) / 365.0;
+        // Halfway in expiry between 1Y and 5Y: ATM is strictly between the nodes.
         let e3 = Period::years(3).add_to(reference)?;
-        let mid = c.atm_vol(f64::from(e3 - reference) / 365.0, 5.0);
+        let mid = c.atm_vol(f64::from(e3 - reference) / 365.0, ty5);
         let (a, b) = (c.node(0, 1).atm_vol, c.node(1, 1).atm_vol);
         assert!(mid < a.max(b) && mid > a.min(b));
         // Beyond the grid: flat.
         let e10 = Period::years(10).add_to(reference)?;
-        assert_abs_diff_eq!(c.atm_vol(f64::from(e10 - reference) / 365.0, 5.0), c.node(1, 1).atm_vol, epsilon = 1e-15);
+        assert_abs_diff_eq!(c.atm_vol(f64::from(e10 - reference) / 365.0, ty5), c.node(1, 1).atm_vol, epsilon = 1e-15);
         Ok(())
     }
 
