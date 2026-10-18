@@ -3,7 +3,7 @@ resolver = "2"
 members = [
     "crates/fq-core",   # time, math, market snapshot
     "crates/fq-rates",  # indices, curves, bonds, futures, swaps, swaptions
-    # "crates/fq-py",   # PyO3 bindings (added later)
+    "crates/fq-py",   # PyO3 bindings
     # "crates/fq-capi", # flat C ABI for Excel/XLL (added later)
 ]
 

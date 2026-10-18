@@ -1,0 +1,23 @@
+[package]
+name = "fq-py"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Python bindings for ferrumquant (PyO3)."
+publish = false
+
+[lib]
+# The Python module is `ferrumquant`; `cdylib` for the extension, `rlib` so
+# `cargo test`/`cargo clippy` still work on the crate itself.
+name = "ferrumquant"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+fq-core = { workspace = true }
+fq-rates = { workspace = true }
+pyo3 = { version = "0.23", features = ["extension-module", "abi3-py39"] }
+
+[lints]
+workspace = true
