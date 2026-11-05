@@ -10,6 +10,7 @@
 //! strictly increase; the usual choice is deposit + futures out to ~2Y, then
 //! swaps.
 
+use std::cell::RefCell;
 use std::fmt;
 
 use thiserror::Error;
@@ -37,6 +38,8 @@ pub enum BootstrapError {
     Period(#[from] PeriodError),
     #[error("solving node {node} ({key}): {source}")]
     Solver { key: InstrumentKey, node: Date, source: SolverError },
+    #[error("valuing {key} while solving node {node}: {source}")]
+    Valuation { key: InstrumentKey, node: Date, source: Box<BootstrapError> },
     #[error("no instruments given")]
     NoInstruments,
     #[error("instruments {a} and {b} both pin node {node}")]
@@ -166,11 +169,7 @@ pub struct BootstrapConfig {
 
 impl Default for BootstrapConfig {
     fn default() -> Self {
-        Self {
-            interpolation: Interpolation::LogLinearDiscount,
-            solver: SolverConfig { tolerance: 1e-14, max_iterations: 200 },
-            zero_rate_bounds: (-0.5, 1.0),
-        }
+        Self { interpolation: Interpolation::LogLinearDiscount, solver: SolverConfig { tolerance: 1e-14, max_iterations: 200 }, zero_rate_bounds: (-0.5, 1.0) }
     }
 }
 
@@ -223,16 +222,26 @@ pub fn bootstrap_sofr(
         }
         let t = f64::from(node - trade_date) / 365.0;
 
+        // The solver only sees f64; keep the last valuation error so a
+        // missing fixing (say) surfaces as itself rather than as "non-finite".
+        let last_error: RefCell<Option<BootstrapError>> = RefCell::new(None);
         let objective = |z: f64| -> f64 {
             let mut trial = nodes.clone();
             trial.push((node, (-z * t).exp()));
-            match DiscountCurve::new(trade_date, &trial, config.interpolation) {
-                Ok(curve) => inst.npv(index, &curve).unwrap_or(f64::NAN),
-                Err(_) => f64::NAN,
+            let valued = DiscountCurve::new(trade_date, &trial, config.interpolation).map_err(BootstrapError::from).and_then(|curve| inst.npv(index, &curve));
+            match valued {
+                Ok(v) => v,
+                Err(e) => {
+                    *last_error.borrow_mut() = Some(e);
+                    f64::NAN
+                }
             }
         };
         let (lo, hi) = config.zero_rate_bounds;
-        let z = brent(objective, lo, hi, config.solver).map_err(|source| BootstrapError::Solver { key: *key, node, source })?;
+        let z = brent(objective, lo, hi, config.solver).map_err(|source| match last_error.borrow_mut().take() {
+            Some(e) => BootstrapError::Valuation { key: *key, node, source: Box::new(e) },
+            None => BootstrapError::Solver { key: *key, node, source },
+        })?;
 
         let df = (-z * t).exp();
         nodes.push((node, df));
@@ -257,8 +266,16 @@ mod tests {
 
     fn ois_quotes() -> Vec<BootstrapInstrument> {
         [
-            ("1M", 0.0430), ("3M", 0.0425), ("6M", 0.0415), ("1Y", 0.0400), ("2Y", 0.0380),
-            ("3Y", 0.0375), ("5Y", 0.0378), ("7Y", 0.0385), ("10Y", 0.0395), ("30Y", 0.0410),
+            ("1M", 0.0430),
+            ("3M", 0.0425),
+            ("6M", 0.0415),
+            ("1Y", 0.0400),
+            ("2Y", 0.0380),
+            ("3Y", 0.0375),
+            ("5Y", 0.0378),
+            ("7Y", 0.0385),
+            ("10Y", 0.0395),
+            ("30Y", 0.0410),
         ]
         .into_iter()
         .map(|(t, r)| BootstrapInstrument::ois(t.parse().expect("tenor"), r))
@@ -275,6 +292,24 @@ mod tests {
             q.push(BootstrapInstrument::ois(t.parse().expect("tenor"), r));
         }
         q
+    }
+
+    /// Regression: a valuation failure inside the solver used to surface as
+    /// "objective returned a non-finite value"; the real cause must survive.
+    #[test]
+    fn valuation_errors_survive_the_solver() {
+        let trade = d(2026, 10, 13);
+        // SR3 U26 started on 16 Sep 2026: valuing it needs SOFR fixings the index does not have.
+        let quotes = [BootstrapInstrument::deposit(Period::days(1), 0.043), BootstrapInstrument::sofr_future("U26".parse().expect("imm"), 95.7, 0.0)];
+        let err = bootstrap_sofr(trade, &OvernightIndex::sofr(), &quotes, BootstrapConfig::default()).expect_err("must fail");
+        match &err {
+            BootstrapError::Valuation { key, source, .. } => {
+                assert_eq!(key.to_string(), "SR3 U26");
+                assert!(source.to_string().contains("fixing"), "{source}");
+            }
+            other => panic!("expected Valuation, got {other:?}"),
+        }
+        assert!(err.to_string().contains("SR3 U26") && err.to_string().contains("fixing"), "{err}");
     }
 
     #[test]

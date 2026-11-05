@@ -25,15 +25,17 @@ pub enum SabrError {
     NoConvergence { rmse: f64 },
 }
 
+/// Validated SABR parameters. Fields are private so a value can only exist
+/// through `new`, which rejects non-finite or out-of-range inputs.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SabrParams {
-    pub alpha: f64,
-    pub beta: f64,
-    pub rho: f64,
-    pub nu: f64,
+    alpha: f64,
+    beta: f64,
+    rho: f64,
+    nu: f64,
     /// Shift applied to forward and strikes (0 for unshifted). Only matters
     /// for `beta > 0` or for lognormal-vol output.
-    pub shift: f64,
+    shift: f64,
 }
 
 impl SabrParams {
@@ -43,15 +45,43 @@ impl SabrParams {
         Ok(p)
     }
 
-    pub fn validate(&self) -> Result<(), SabrError> {
+    pub const fn alpha(&self) -> f64 {
+        self.alpha
+    }
+
+    pub const fn beta(&self) -> f64 {
+        self.beta
+    }
+
+    pub const fn rho(&self) -> f64 {
+        self.rho
+    }
+
+    pub const fn nu(&self) -> f64 {
+        self.nu
+    }
+
+    pub const fn shift(&self) -> f64 {
+        self.shift
+    }
+
+    /// Same smile shape with a different `alpha` (used to re-anchor to an ATM vol).
+    pub fn with_alpha(&self, alpha: f64) -> Result<Self, SabrError> {
+        Self::new(alpha, self.beta, self.rho, self.nu, self.shift)
+    }
+
+    fn validate(&self) -> Result<(), SabrError> {
         if self.alpha <= 0.0 || !self.alpha.is_finite() {
-            return Err(SabrError::Invalid(format!("alpha {} must be positive", self.alpha)));
+            return Err(SabrError::Invalid(format!("alpha {} must be positive and finite", self.alpha)));
         }
-        if !(0.0..=1.0).contains(&self.beta) {
+        if !self.beta.is_finite() || !(0.0..=1.0).contains(&self.beta) {
             return Err(SabrError::Invalid(format!("beta {} must be in [0, 1]", self.beta)));
         }
-        if self.rho <= -1.0 || self.rho >= 1.0 {
+        if !self.rho.is_finite() || self.rho <= -1.0 || self.rho >= 1.0 {
             return Err(SabrError::Invalid(format!("rho {} must be in (-1, 1)", self.rho)));
+        }
+        if !self.shift.is_finite() {
+            return Err(SabrError::Invalid(format!("shift {} must be finite", self.shift)));
         }
         if self.nu < 0.0 || !self.nu.is_finite() {
             return Err(SabrError::Invalid(format!("nu {} must be non-negative", self.nu)));
@@ -80,8 +110,8 @@ impl SabrParams {
         let x = if z.abs() < 1e-7 { 1.0 } else { z / ((((1.0 - 2.0 * r * z + z * z).sqrt() + z - r) / (1.0 - r)).ln()) };
         let numer_series = 1.0 + log_fk * log_fk / 24.0 + log_fk.powi(4) / 1920.0;
         let denom_series = 1.0 + one_b * one_b * log_fk * log_fk / 24.0 + one_b.powi(4) * log_fk.powi(4) / 1920.0;
-        let corr = 1.0
-            + (-b * (2.0 - b) * a * a / (24.0 * fk.powf(one_b)) + r * b * n * a / (4.0 * fk.powf(one_b / 2.0)) + (2.0 - 3.0 * r * r) * n * n / 24.0) * t;
+        let corr =
+            1.0 + (-b * (2.0 - b) * a * a / (24.0 * fk.powf(one_b)) + r * b * n * a / (4.0 * fk.powf(one_b / 2.0)) + (2.0 - 3.0 * r * r) * n * n / 24.0) * t;
         a * fk.powf(b / 2.0) * numer_series / denom_series * x * corr
     }
 
@@ -111,12 +141,29 @@ pub enum SabrVolType {
     Lognormal,
 }
 
+/// Why the optimiser stopped. Convergence says nothing about fit quality:
+/// a converged search can still sit at a poor `rmse`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Termination {
+    /// Simplex spread fell below tolerance.
+    Converged,
+    /// Iteration budget exhausted; `params` are the best point seen.
+    MaxIterations,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SabrCalibration {
     pub params: SabrParams,
-    /// Root-mean-square vol error over the strip.
+    /// Root-mean-square vol error over the strip, in the quotes' vol units.
     pub rmse: f64,
     pub iterations: usize,
+    pub termination: Termination,
+}
+
+impl SabrCalibration {
+    pub fn converged(&self) -> bool {
+        self.termination == Termination::Converged
+    }
 }
 
 /// Fit `(alpha, rho, nu)` with `beta` and `shift` fixed to `(strike, vol)`
@@ -134,7 +181,8 @@ pub fn calibrate(
     if quotes.len() < 3 {
         return Err(SabrError::TooFewStrikes { need: 3, got: quotes.len() });
     }
-    let atm_guess = quotes.iter().min_by(|a, b| (a.0 - f).abs().partial_cmp(&(b.0 - f).abs()).unwrap_or(std::cmp::Ordering::Equal)).map(|q| q.1).unwrap_or(0.01);
+    let atm_guess =
+        quotes.iter().min_by(|a, b| (a.0 - f).abs().partial_cmp(&(b.0 - f).abs()).unwrap_or(std::cmp::Ordering::Equal)).map(|q| q.1).unwrap_or(0.01);
     let (a0, r0, n0) = initial.unwrap_or((if beta == 0.0 { atm_guess } else { atm_guess * (f + shift).powf(1.0 - beta) }, 0.0, 0.3));
 
     // Unconstrained coordinates: alpha = exp(u0), rho = tanh(u1), nu = exp(u2).
@@ -159,19 +207,19 @@ pub fn calibrate(
     };
 
     let start = [a0.max(1e-8).ln(), r0.clamp(-0.999, 0.999).atanh(), n0.max(1e-8).ln()];
-    let (u, sse, iterations) = nelder_mead(objective, start, [0.3, 0.3, 0.5], 2000, 1e-16);
+    let (u, sse, iterations, termination) = nelder_mead(objective, start, [0.3, 0.3, 0.5], 2000, 1e-16);
     let params = to_params(&u);
     params.validate()?;
     let rmse = (sse / quotes.len() as f64).sqrt();
     if !rmse.is_finite() {
         return Err(SabrError::NoConvergence { rmse });
     }
-    Ok(SabrCalibration { params, rmse, iterations })
+    Ok(SabrCalibration { params, rmse, iterations, termination })
 }
 
 /// Nelder–Mead simplex minimiser in three dimensions. Returns the best
-/// point, its objective value, and the iteration count.
-fn nelder_mead(f: impl Fn(&[f64; 3]) -> f64, start: [f64; 3], step: [f64; 3], max_iter: usize, tol: f64) -> ([f64; 3], f64, usize) {
+/// point, its objective value, the iteration count, and why it stopped.
+fn nelder_mead(f: impl Fn(&[f64; 3]) -> f64, start: [f64; 3], step: [f64; 3], max_iter: usize, tol: f64) -> ([f64; 3], f64, usize, Termination) {
     let mut simplex: Vec<([f64; 3], f64)> = Vec::with_capacity(4);
     simplex.push((start, f(&start)));
     for i in 0..3 {
@@ -181,17 +229,19 @@ fn nelder_mead(f: impl Fn(&[f64; 3]) -> f64, start: [f64; 3], step: [f64; 3], ma
     }
     let (alpha, gamma, rho, sigma) = (1.0, 2.0, 0.5, 0.5);
     let mut iter = 0;
+    let mut termination = Termination::MaxIterations;
     while iter < max_iter {
         iter += 1;
         simplex.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
         let spread = simplex[3].1 - simplex[0].1;
         if spread.abs() < tol * (1.0 + simplex[0].1.abs()) {
+            termination = Termination::Converged;
             break;
         }
         let mut centroid = [0.0; 3];
         for p in &simplex[..3] {
-            for k in 0..3 {
-                centroid[k] += p.0[k] / 3.0;
+            for (c, x) in centroid.iter_mut().zip(&p.0) {
+                *c += x / 3.0;
             }
         }
         let worst = simplex[3];
@@ -218,8 +268,8 @@ fn nelder_mead(f: impl Fn(&[f64; 3]) -> f64, start: [f64; 3], step: [f64; 3], ma
             } else {
                 let best = simplex[0].0;
                 for p in simplex.iter_mut().skip(1) {
-                    for k in 0..3 {
-                        p.0[k] = best[k] + sigma * (p.0[k] - best[k]);
+                    for (x, b) in p.0.iter_mut().zip(&best) {
+                        *x = b + sigma * (*x - b);
                     }
                     p.1 = f(&p.0);
                 }
@@ -227,13 +277,32 @@ fn nelder_mead(f: impl Fn(&[f64; 3]) -> f64, start: [f64; 3], step: [f64; 3], ma
         }
     }
     simplex.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap_or(std::cmp::Ordering::Equal));
-    (simplex[0].0, simplex[0].1, iter)
+    (simplex[0].0, simplex[0].1, iter, termination)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use approx::assert_abs_diff_eq;
+
+    #[test]
+    fn non_finite_and_out_of_range_parameters_are_rejected() {
+        for (a, b, r, n, sh) in [
+            (f64::NAN, 0.0, 0.0, 0.3, 0.0),
+            (0.01, f64::NAN, 0.0, 0.3, 0.0),
+            (0.01, 0.0, f64::NAN, 0.3, 0.0),
+            (0.01, 0.0, 0.0, f64::INFINITY, 0.0),
+            (0.01, 0.0, 0.0, 0.3, f64::NAN),
+            (0.01, 0.0, 1.0, 0.3, 0.0),
+            (0.01, 1.5, 0.0, 0.3, 0.0),
+            (-0.01, 0.0, 0.0, 0.3, 0.0),
+        ] {
+            assert!(matches!(SabrParams::new(a, b, r, n, sh), Err(SabrError::Invalid(_))), "{a} {b} {r} {n} {sh}");
+        }
+        let p = SabrParams::new(0.01, 0.0, -0.2, 0.3, 0.0).expect("valid");
+        assert!(matches!(p.with_alpha(f64::NAN), Err(SabrError::Invalid(_))));
+        assert!((p.with_alpha(0.02).expect("valid").alpha() - 0.02).abs() < 1e-15);
+    }
 
     type R = Result<(), SabrError>;
 
@@ -299,9 +368,10 @@ mod tests {
         let quotes: Vec<(f64, f64)> = strikes.iter().map(|&dk| (f + dk, truth.normal_vol(f, f + dk, t))).collect();
         let cal = calibrate(f, t, 0.0, 0.0, &quotes, SabrVolType::Normal, None)?;
         assert!(cal.rmse < 1e-8, "rmse {}", cal.rmse);
-        assert_abs_diff_eq!(cal.params.alpha, 0.0072, epsilon = 1e-6);
-        assert_abs_diff_eq!(cal.params.rho, -0.28, epsilon = 1e-3);
-        assert_abs_diff_eq!(cal.params.nu, 0.42, epsilon = 1e-3);
+        assert!(cal.converged(), "{:?}", cal.termination);
+        assert_abs_diff_eq!(cal.params.alpha(), 0.0072, epsilon = 1e-6);
+        assert_abs_diff_eq!(cal.params.rho(), -0.28, epsilon = 1e-3);
+        assert_abs_diff_eq!(cal.params.nu(), 0.42, epsilon = 1e-3);
         Ok(())
     }
 
@@ -312,9 +382,10 @@ mod tests {
         let quotes: Vec<(f64, f64)> = [0.005, 0.015, 0.025, 0.035, 0.05].iter().map(|&k| (k, truth.lognormal_vol(f, k, t).expect("vol"))).collect();
         let cal = calibrate(f, t, 0.5, 0.02, &quotes, SabrVolType::Lognormal, None)?;
         assert!(cal.rmse < 1e-8, "rmse {}", cal.rmse);
-        assert_abs_diff_eq!(cal.params.alpha, 0.035, epsilon = 1e-5);
-        assert_abs_diff_eq!(cal.params.rho, -0.2, epsilon = 1e-3);
-        assert_abs_diff_eq!(cal.params.nu, 0.5, epsilon = 1e-3);
+        assert!(cal.converged());
+        assert_abs_diff_eq!(cal.params.alpha(), 0.035, epsilon = 1e-5);
+        assert_abs_diff_eq!(cal.params.rho(), -0.2, epsilon = 1e-3);
+        assert_abs_diff_eq!(cal.params.nu(), 0.5, epsilon = 1e-3);
         Ok(())
     }
 

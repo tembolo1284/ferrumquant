@@ -19,18 +19,51 @@ use fq_core::time::Date;
 use crate::curve::{BootstrapConfig, BootstrapError, BootstrapInstrument, BootstrapResult, CurveError, DiscountCurve, InstrumentKey, bootstrap_sofr};
 use crate::index::OvernightIndex;
 
-/// Bumped-quote sensitivities of a bootstrapped curve.
+/// Bumped-quote sensitivities of a bootstrapped curve. Fields are private:
+/// `new` checks the matrix is square, finite and sized to the keys, so
+/// `to_par_ladder` cannot index out of range.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CurveJacobian {
-    /// Key of each input quote, in node order.
-    pub keys: Vec<InstrumentKey>,
-    /// `matrix[i][j]` = change in node `i`'s zero rate per unit change in quote `j`.
-    pub matrix: Vec<Vec<f64>>,
-    /// Quote bump used to build the Jacobian (rate units, e.g. 1e-4).
-    pub bump: f64,
+    keys: Vec<InstrumentKey>,
+    matrix: Vec<Vec<f64>>,
+    bump: f64,
 }
 
 impl CurveJacobian {
+    /// `matrix[i][j]` = change in node `i`'s zero rate per unit change in
+    /// quote `j`; `bump` is the quote bump it was built with (rate units).
+    pub fn new(keys: Vec<InstrumentKey>, matrix: Vec<Vec<f64>>, bump: f64) -> Result<Self, CurveError> {
+        check_bump(bump)?;
+        let n = keys.len();
+        if matrix.len() != n {
+            return Err(CurveError::JacobianShape { keys: n, rows: matrix.len(), row: 0, cols: 0 });
+        }
+        for (i, row) in matrix.iter().enumerate() {
+            if row.len() != n {
+                return Err(CurveError::JacobianShape { keys: n, rows: n, row: i, cols: row.len() });
+            }
+            if let Some(j) = row.iter().position(|x| !x.is_finite()) {
+                return Err(CurveError::JacobianNonFinite { row: i, col: j });
+            }
+        }
+        Ok(Self { keys, matrix, bump })
+    }
+
+    /// Key of each input quote, in node order.
+    pub fn keys(&self) -> &[InstrumentKey] {
+        &self.keys
+    }
+
+    /// `matrix[i][j]` = d zero_i / d quote_j.
+    pub fn matrix(&self) -> &[Vec<f64>] {
+        &self.matrix
+    }
+
+    /// Quote bump used to build the Jacobian (rate units, e.g. 1e-4).
+    pub const fn bump(&self) -> f64 {
+        self.bump
+    }
+
     pub fn node_count(&self) -> usize {
         self.keys.len()
     }
@@ -55,6 +88,7 @@ pub fn bootstrap_sofr_with_jacobian(
     config: BootstrapConfig,
     bump: f64,
 ) -> Result<(BootstrapResult, CurveJacobian), BootstrapError> {
+    check_bump(bump)?;
     let base = bootstrap_sofr(trade_date, index, instruments, config)?;
     let n = base.nodes.len();
     let keys = base.keys();
@@ -71,7 +105,14 @@ pub fn bootstrap_sofr_with_jacobian(
             row[j] = (up.curve.node_zero_rate(i)? - down.curve.node_zero_rate(i)?) / (2.0 * bump);
         }
     }
-    Ok((base, CurveJacobian { keys, matrix, bump }))
+    Ok((base, CurveJacobian::new(keys, matrix, bump)?))
+}
+
+fn check_bump(bump: f64) -> Result<(), CurveError> {
+    if !bump.is_finite() || bump == 0.0 {
+        return Err(CurveError::InvalidBump(bump));
+    }
+    Ok(())
 }
 
 fn bumped(instruments: &[BootstrapInstrument], j: usize, shift: f64) -> Vec<BootstrapInstrument> {
@@ -87,6 +128,7 @@ pub fn zero_bucket_ladder<E: From<CurveError>>(
     bump: f64,
     mut price: impl FnMut(&DiscountCurve) -> Result<f64, E>,
 ) -> Result<Vec<f64>, E> {
+    check_bump(bump)?;
     (0..curve.node_count())
         .map(|i| {
             let up = price(&curve.with_node_shift(i, bump)?)?;
@@ -109,6 +151,35 @@ mod tests {
         Date::from_ymd(y, m, dd).expect("valid test date")
     }
 
+    trait PipeOk {
+        fn pipe_ok(self) -> Result<f64, CurveError>;
+    }
+    impl PipeOk for f64 {
+        fn pipe_ok(self) -> Result<f64, CurveError> {
+            Ok(self)
+        }
+    }
+
+    #[test]
+    fn bump_and_shape_are_validated() {
+        let keys = vec![InstrumentKey::Ois(Tenor::years(1)), InstrumentKey::Ois(Tenor::years(2))];
+        for bump in [0.0, f64::NAN, f64::INFINITY] {
+            assert!(matches!(CurveJacobian::new(keys.clone(), vec![vec![1.0, 0.0], vec![0.0, 1.0]], bump), Err(CurveError::InvalidBump(_))));
+        }
+        assert!(matches!(CurveJacobian::new(keys.clone(), vec![vec![1.0, 0.0]], 1e-4), Err(CurveError::JacobianShape { .. })));
+        assert!(matches!(CurveJacobian::new(keys.clone(), vec![vec![1.0], vec![0.0, 1.0]], 1e-4), Err(CurveError::JacobianShape { row: 0, cols: 1, .. })));
+        assert!(matches!(
+            CurveJacobian::new(keys.clone(), vec![vec![1.0, f64::NAN], vec![0.0, 1.0]], 1e-4),
+            Err(CurveError::JacobianNonFinite { row: 0, col: 1 })
+        ));
+        let jac = CurveJacobian::new(keys, vec![vec![1.0, 0.0], vec![0.5, 1.0]], 1e-4).expect("valid");
+        assert_eq!(jac.to_par_ladder(&[2.0, 4.0]).expect("sized"), vec![4.0, 4.0]);
+        assert!(matches!(jac.to_par_ladder(&[1.0]), Err(CurveError::NodeOutOfRange { .. })));
+        let curve = DiscountCurve::flat(Date::from_ymd(2026, 10, 13).expect("date"), 0.04, Date::from_ymd(2030, 1, 1).expect("date")).expect("curve");
+        let r: Result<Vec<f64>, CurveError> = zero_bucket_ladder(&curve, 0.0, |c| c.discount_t(1.0).pipe_ok());
+        assert!(matches!(r, Err(CurveError::InvalidBump(_))));
+    }
+
     fn quotes() -> Vec<BootstrapInstrument> {
         [("1Y", 0.0400), ("2Y", 0.0380), ("5Y", 0.0378), ("10Y", 0.0395)]
             .into_iter()
@@ -125,7 +196,7 @@ mod tests {
         assert_eq!(n, 4);
         for i in 0..n {
             for j in 0..n {
-                let v = jac.matrix[i][j];
+                let v = jac.matrix()[i][j];
                 if j > i {
                     // A later quote cannot move an earlier node in a sequential bootstrap.
                     assert_abs_diff_eq!(v, 0.0, epsilon = 1e-9);
@@ -147,7 +218,7 @@ mod tests {
         let zero = zero_bucket_ladder(&res.curve, 1e-4, |c| swap.npv(&index, c))?;
         let par = jac.to_par_ladder(&zero)?;
         let annuity = swap.value(&index, &res.curve, &res.curve)?.annuity;
-        for (j, key) in jac.keys.iter().enumerate() {
+        for (j, key) in jac.keys().iter().enumerate() {
             if *key == InstrumentKey::Ois(Tenor::years(5)) {
                 assert_abs_diff_eq!(par[j], annuity, epsilon = 0.02 * annuity);
             } else {

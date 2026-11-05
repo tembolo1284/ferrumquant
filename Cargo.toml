@@ -3,9 +3,13 @@ resolver = "2"
 members = [
     "crates/fq-core",   # time, math, market snapshot
     "crates/fq-rates",  # indices, curves, bonds, futures, swaps, swaptions
-    "crates/fq-py",   # PyO3 bindings
+    "crates/fq-fx",     # currencies, FX forwards/NDFs, vanilla options, vol surfaces
+    "crates/fq-py",     # PyO3 bindings -> python module `ferrumquant`
     # "crates/fq-capi", # flat C ABI for Excel/XLL (added later)
 ]
+# Plain `cargo build`/`cargo test` skip the Python bindings; `--workspace`
+# (or `maturin develop` in crates/fq-py) still builds them.
+default-members = ["crates/fq-core", "crates/fq-rates", "crates/fq-fx"]
 
 [workspace.package]
 version = "0.1.0"
@@ -18,6 +22,7 @@ description = "QuantLib-inspired Rust library for pricing and risk across rates,
 [workspace.dependencies]
 fq-core = { path = "crates/fq-core" }
 fq-rates = { path = "crates/fq-rates" }
+fq-fx = { path = "crates/fq-fx" }
 num-traits = "0.2"
 thiserror = "2"
 approx = "0.5"

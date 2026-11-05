@@ -91,11 +91,13 @@ pub fn norm_cdf(x: f64) -> f64 {
 }
 
 /// Inverse of `norm_cdf` (Acklam's algorithm with one Newton refinement).
-#[allow(clippy::excessive_precision, clippy::float_cmp)] // published coefficients; exact 0/1 boundary checks
+#[allow(clippy::excessive_precision, clippy::float_cmp)]
 pub fn norm_inv(p: f64) -> f64 {
-    const A: [f64; 6] = [-3.969_683_028_665_376e1, 2.209_460_984_245_205e2, -2.759_285_104_469_687e2, 1.383_577_518_672_690e2, -3.066_479_806_614_716e1, 2.506_628_277_459_239];
+    const A: [f64; 6] =
+        [-3.969_683_028_665_376e1, 2.209_460_984_245_205e2, -2.759_285_104_469_687e2, 1.383_577_518_672_690e2, -3.066_479_806_614_716e1, 2.506_628_277_459_239];
     const B: [f64; 5] = [-5.447_609_879_822_406e1, 1.615_858_368_580_409e2, -1.556_989_798_598_866e2, 6.680_131_188_771_972e1, -1.328_068_155_288_572e1];
-    const C: [f64; 6] = [-7.784_894_002_430_293e-3, -3.223_964_580_411_365e-1, -2.400_758_277_161_838, -2.549_732_539_343_734, 4.374_664_141_464_968, 2.938_163_982_698_783];
+    const C: [f64; 6] =
+        [-7.784_894_002_430_293e-3, -3.223_964_580_411_365e-1, -2.400_758_277_161_838, -2.549_732_539_343_734, 4.374_664_141_464_968, 2.938_163_982_698_783];
     const D: [f64; 4] = [7.784_695_709_041_462e-3, 3.224_671_290_700_398e-1, 2.445_134_137_142_996, 3.754_408_661_907_416];
     if !(0.0..=1.0).contains(&p) {
         return f64::NAN;
@@ -115,8 +117,7 @@ pub fn norm_inv(p: f64) -> f64 {
     } else {
         let q = p - 0.5;
         let r = q * q;
-        (((((A[0] * r + A[1]) * r + A[2]) * r + A[3]) * r + A[4]) * r + A[5]) * q
-            / (((((B[0] * r + B[1]) * r + B[2]) * r + B[3]) * r + B[4]) * r + 1.0)
+        (((((A[0] * r + A[1]) * r + A[2]) * r + A[3]) * r + A[4]) * r + A[5]) * q / (((((B[0] * r + B[1]) * r + B[2]) * r + B[3]) * r + B[4]) * r + 1.0)
     };
     // One Halley step brings this to full double precision.
     let e = norm_cdf(x) - p;
@@ -124,9 +125,11 @@ pub fn norm_inv(p: f64) -> f64 {
     x - u / (1.0 + x * u / 2.0)
 }
 
-fn check(forward: f64, sigma: f64, t: f64) -> Result<(), BlackError> {
-    if !forward.is_finite() || !sigma.is_finite() || !t.is_finite() {
-        return Err(BlackError::Invalid("non-finite input".into()));
+fn check(forward: f64, strike: f64, sigma: f64, t: f64) -> Result<(), BlackError> {
+    for (name, x) in [("forward", forward), ("strike", strike), ("volatility", sigma), ("time to expiry", t)] {
+        if !x.is_finite() {
+            return Err(BlackError::Invalid(format!("non-finite {name} {x}")));
+        }
     }
     if sigma < 0.0 {
         return Err(BlackError::Invalid(format!("negative volatility {sigma}")));
@@ -139,17 +142,12 @@ fn check(forward: f64, sigma: f64, t: f64) -> Result<(), BlackError> {
 
 fn intrinsic(kind: OptionType, forward: f64, strike: f64) -> BlackResult {
     let moneyness = kind.sign() * (forward - strike);
-    BlackResult {
-        price: moneyness.max(0.0),
-        delta: if moneyness > 0.0 { kind.sign() } else { 0.0 },
-        gamma: 0.0,
-        vega: 0.0,
-    }
+    BlackResult { price: moneyness.max(0.0), delta: if moneyness > 0.0 { kind.sign() } else { 0.0 }, gamma: 0.0, vega: 0.0 }
 }
 
 /// Bachelier (normal) model: dF = sigma dW. Vol in absolute rate units per sqrt(year).
 pub fn bachelier(kind: OptionType, forward: f64, strike: f64, sigma: f64, t: f64) -> Result<BlackResult, BlackError> {
-    check(forward, sigma, t)?;
+    check(forward, strike, sigma, t)?;
     let sd = sigma * t.sqrt();
     if sd == 0.0 {
         return Ok(intrinsic(kind, forward, strike));
@@ -157,18 +155,16 @@ pub fn bachelier(kind: OptionType, forward: f64, strike: f64, sigma: f64, t: f64
     let d = (forward - strike) / sd;
     let s = kind.sign();
     let nd = norm_pdf(d);
-    Ok(BlackResult {
-        price: s * (forward - strike) * norm_cdf(s * d) + sd * nd,
-        delta: s * norm_cdf(s * d),
-        gamma: nd / sd,
-        vega: t.sqrt() * nd,
-    })
+    Ok(BlackResult { price: s * (forward - strike) * norm_cdf(s * d) + sd * nd, delta: s * norm_cdf(s * d), gamma: nd / sd, vega: t.sqrt() * nd })
 }
 
 /// Shifted Black model: d(F + shift) = sigma (F + shift) dW. `shift` is 0 for
 /// plain Black-76.
 pub fn shifted_black(kind: OptionType, forward: f64, strike: f64, sigma: f64, t: f64, shift: f64) -> Result<BlackResult, BlackError> {
-    check(forward, sigma, t)?;
+    check(forward, strike, sigma, t)?;
+    if !shift.is_finite() {
+        return Err(BlackError::Invalid(format!("non-finite shift {shift}")));
+    }
     let (f, k) = (forward + shift, strike + shift);
     if f <= 0.0 || k <= 0.0 {
         return Err(BlackError::Invalid(format!("shifted forward {f} and strike {k} must be positive")));
@@ -194,6 +190,9 @@ pub fn black76(kind: OptionType, forward: f64, strike: f64, sigma: f64, t: f64) 
 }
 
 fn implied_vol(price: f64, lower: f64, upper: f64, hi_vol: f64, mut f: impl FnMut(f64) -> Result<f64, BlackError>) -> Result<f64, BlackError> {
+    if !price.is_finite() || !hi_vol.is_finite() || hi_vol <= 0.0 {
+        return Err(BlackError::Invalid(format!("price {price} and vol bound {hi_vol} must be finite (bound positive)")));
+    }
     if !(lower - 1e-14..=upper + 1e-14).contains(&price) {
         return Err(BlackError::PriceOutOfBounds { price, lower, upper });
     }
@@ -251,6 +250,18 @@ mod tests {
         for x in [-3.0, -0.7, 0.0, 0.3, 2.5] {
             assert_abs_diff_eq!(norm_inv(norm_cdf(x)), x, epsilon = 1e-12);
         }
+    }
+
+    #[test]
+    fn non_finite_inputs_are_rejected_not_propagated() {
+        use OptionType::Call;
+        for (f, k, v, t) in [(f64::NAN, 0.04, 0.01, 1.0), (0.04, f64::NAN, 0.01, 1.0), (0.04, 0.04, f64::INFINITY, 1.0), (0.04, 0.04, 0.01, f64::NAN)] {
+            assert!(matches!(bachelier(Call, f, k, v, t), Err(BlackError::Invalid(_))), "{f} {k} {v} {t}");
+            assert!(matches!(shifted_black(Call, f, k, v, t, 0.0), Err(BlackError::Invalid(_))), "{f} {k} {v} {t}");
+        }
+        assert!(matches!(shifted_black(Call, 0.04, 0.04, 0.2, 1.0, f64::NAN), Err(BlackError::Invalid(_))));
+        assert!(matches!(bachelier_implied_vol(Call, 0.04, 0.04, 1.0, f64::NAN, 1.0), Err(BlackError::Invalid(_))));
+        assert!(matches!(shifted_black_implied_vol(Call, 0.04, 0.04, 1.0, 0.0, 0.001, f64::NAN), Err(BlackError::Invalid(_))));
     }
 
     #[test]

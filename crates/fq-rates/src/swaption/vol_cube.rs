@@ -6,8 +6,16 @@
 //! normal SABR (β = 0) with the ATM vol held exactly. Querying
 //! `(expiry, tenor, forward, strike)` interpolates the *smile parameters*
 //! bilinearly in (expiry time, tenor years) and evaluates the SABR vol at
-//! the requested strike, which keeps the surface arbitrage-consistent at
-//! every strike rather than only at the quoted offsets.
+//! the requested strike, so a query between quoted offsets gets a smile
+//! shape rather than a straight line between two quotes.
+//!
+//! This is the common desk construction, not an arbitrage-free one: Hagan's
+//! expansion can imply negative densities far from the money, and
+//! interpolating (ρ, ν) between nodes carries no convexity guarantee across
+//! strikes or calendar consistency across expiries. Nothing here checks
+//! either; a surface used to price far-OTM strikes should be checked by the
+//! caller (e.g. finite-difference the call price in strike for a negative
+//! second derivative).
 //!
 //! `node_weights` exposes the four grid nodes and weights a query touches,
 //! the hook for bucketed vega in a risk engine.
@@ -34,6 +42,8 @@ pub enum VolCubeError {
     NoSmile { expiry: Period, tenor: Period },
     #[error("expiry {0} is not after the reference date")]
     NonPositiveExpiry(Date),
+    #[error("smile calibration at node ({expiry}, {tenor}) stopped without converging after {iterations} iterations (rmse {rmse})")]
+    NotConverged { expiry: Period, tenor: Period, iterations: usize, rmse: f64 },
 }
 
 /// Market quotes for one (expiry, tenor) node.
@@ -79,7 +89,13 @@ pub struct DefaultSmile {
 impl SwaptionVolCube {
     /// `quotes` is row-major over `expiries` then `tenors`. Nodes without
     /// smile quotes use `default_smile` (rho, nu) with alpha set from ATM.
-    pub fn new(reference: Date, expiries: &[Period], tenors: &[Period], quotes: &[NodeQuotes], default_smile: Option<DefaultSmile>) -> Result<Self, VolCubeError> {
+    pub fn new(
+        reference: Date,
+        expiries: &[Period],
+        tenors: &[Period],
+        quotes: &[NodeQuotes],
+        default_smile: Option<DefaultSmile>,
+    ) -> Result<Self, VolCubeError> {
         let (ne, nt) = (expiries.len(), tenors.len());
         if quotes.len() != ne * nt {
             return Err(VolCubeError::NodeCount { expected: ne * nt, expiries: ne, tenors: nt, got: quotes.len() });
@@ -98,6 +114,14 @@ impl SwaptionVolCube {
                 let mut strip: Vec<(f64, f64)> = q.smile.iter().map(|&(dk, v)| (q.forward + dk, v)).collect();
                 strip.push((q.forward, q.atm_vol));
                 let fitted = calibrate(q.forward, t, 0.0, 0.0, &strip, SabrVolType::Normal, Some((q.atm_vol, 0.0, 0.3)))?;
+                if !fitted.converged() {
+                    return Err(VolCubeError::NotConverged {
+                        expiry: expiries[idx / nt],
+                        tenor: tenors[idx % nt],
+                        iterations: fitted.iterations,
+                        rmse: fitted.rmse,
+                    });
+                }
                 anchor_alpha(fitted.params, q.atm_vol, t)?
             } else {
                 let d = default_smile.ok_or(VolCubeError::NoSmile { expiry: expiries[idx / nt], tenor: tenors[idx % nt] })?;
@@ -114,8 +138,8 @@ impl SwaptionVolCube {
         };
         Ok(Self {
             atm: grid(&|n| n.atm_vol)?,
-            rho: grid(&|n| n.sabr.rho)?,
-            nu: grid(&|n| n.sabr.nu)?,
+            rho: grid(&|n| n.sabr.rho())?,
+            nu: grid(&|n| n.sabr.nu())?,
             reference,
             expiries: expiries.to_vec(),
             tenors: tenors.to_vec(),
@@ -201,8 +225,8 @@ impl SwaptionVolCube {
 /// Rescale alpha so the normal-SABR ATM vol equals `atm` exactly. With
 /// β = 0 the ATM vol is `α (1 + (2 − 3ρ²) ν² t / 24)`, so this is a division.
 fn anchor_alpha(p: SabrParams, atm: f64, t: f64) -> Result<SabrParams, SabrError> {
-    let corr = 1.0 + (2.0 - 3.0 * p.rho * p.rho) / 24.0 * p.nu * p.nu * t;
-    SabrParams::new(atm / corr, 0.0, p.rho, p.nu, p.shift)
+    let corr = 1.0 + (2.0 - 3.0 * p.rho() * p.rho()) / 24.0 * p.nu() * p.nu() * t;
+    p.with_alpha(atm / corr)
 }
 
 #[cfg(test)]
@@ -261,11 +285,14 @@ mod tests {
         let e1 = Period::years(1).add_to(reference)?;
         let n = c.node(0, 1);
         assert_abs_diff_eq!(c.normal_vol(e1, Period::years(5), n.forward, n.forward)?, n.atm_vol, epsilon = 1e-12);
-        assert_abs_diff_eq!(c.normal_vol(e1, Period::years(5), n.forward, n.forward + 0.01)?, n.sabr.normal_vol(n.forward, n.forward + 0.01, 1.0), epsilon = 1e-10);
-        // Tenor axis in the cube's own ACT/365F years (5Y is 1826 days, not 5.0).
-        let ty5 = f64::from(Period::years(5).add_to(reference)? - reference) / 365.0;
-        // Halfway in expiry between 1Y and 5Y: ATM is strictly between the nodes.
+        assert_abs_diff_eq!(
+            c.normal_vol(e1, Period::years(5), n.forward, n.forward + 0.01)?,
+            n.sabr.normal_vol(n.forward, n.forward + 0.01, 1.0),
+            epsilon = 1e-10
+        );
+        // Halfway in expiry between 1Y and 5Y: ATM is the average of the nodes.
         let e3 = Period::years(3).add_to(reference)?;
+        let ty5 = f64::from(Period::years(5).add_to(reference)? - reference) / 365.0;
         let mid = c.atm_vol(f64::from(e3 - reference) / 365.0, ty5);
         let (a, b) = (c.node(0, 1).atm_vol, c.node(1, 1).atm_vol);
         assert!(mid < a.max(b) && mid > a.min(b));

@@ -3,9 +3,10 @@
 //! Time is ACT/365F from the reference date. The reference node (t = 0,
 //! DF = 1) is implicit. `LogLinearDiscount` (piecewise-constant instantaneous
 //! forwards) is the default and the one the bootstrap uses; `LinearZero`
-//! interpolates continuously-compounded zero rates. Beyond the last node both
-//! extrapolate flat in the interpolated quantity's slope (flat forward /
-//! flat zero respectively).
+//! interpolates continuously-compounded zero rates. Beyond the last node
+//! `LogLinearDiscount` continues the last segment's instantaneous forward
+//! (flat forward) and `LinearZero` holds the last node's zero rate (flat
+//! zero); `extrapolation_is_flat_forward_and_flat_zero` locks both down.
 
 use thiserror::Error;
 
@@ -27,6 +28,12 @@ pub enum CurveError {
     BeforeReference(Date),
     #[error("node index {index} out of range for a curve with {nodes} nodes")]
     NodeOutOfRange { index: usize, nodes: usize },
+    #[error("bump {0} must be finite and non-zero")]
+    InvalidBump(f64),
+    #[error("Jacobian is not square: {keys} keys, {rows} rows, row {row} has {cols} columns")]
+    JacobianShape { keys: usize, rows: usize, row: usize, cols: usize },
+    #[error("Jacobian entry ({row}, {col}) is not finite")]
+    JacobianNonFinite { row: usize, col: usize },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -110,7 +117,6 @@ impl DiscountCurve {
         Ok(-l / self.times[i + 1])
     }
 
-
     /// Node (date, DF) pairs, excluding the implicit reference node.
     pub fn nodes(&self) -> Vec<(Date, f64)> {
         self.dates.iter().zip(&self.log_dfs).skip(1).map(|(&d, &l)| (d, l.exp())).collect()
@@ -154,6 +160,8 @@ impl DiscountCurve {
     /// Parallel shift of the continuously-compounded zero curve by `shift`
     /// (e.g. 1e-4 for +1bp): DF(t) -> DF(t) * exp(-shift * t).
     pub fn shifted(&self, shift: f64) -> Self {
+        // A non-finite shift would poison every discount factor silently.
+        debug_assert!(shift.is_finite(), "non-finite shift {shift}");
         let log_dfs = self.log_dfs.iter().zip(&self.times).map(|(&l, &t)| l - shift * t).collect();
         Self { log_dfs, ..self.clone() }
     }
@@ -161,6 +169,9 @@ impl DiscountCurve {
     /// Same curve with node `i` (0-based, excluding the reference node)
     /// shifted in zero-rate terms; for bucketed risk.
     pub fn with_node_shift(&self, i: usize, shift: f64) -> Result<Self, CurveError> {
+        if !shift.is_finite() {
+            return Err(CurveError::InvalidBump(shift));
+        }
         let mut c = self.clone();
         let nodes = self.node_count();
         let Some(l) = c.log_dfs.get_mut(i + 1) else {
@@ -193,7 +204,8 @@ impl DiscountCurve {
                 // Zero at the reference node is the first segment's zero (avoids 0/0).
                 let z0 = if t0 > 0.0 { -l0 / t0 } else { -l1 / t1 };
                 let z1 = -l1 / t1;
-                let w = (t - t0) / (t1 - t0);
+                // Flat zero beyond the last node: clamp the weight instead of extending the slope.
+                let w = ((t - t0) / (t1 - t0)).min(1.0);
                 -(z0 + w * (z1 - z0)) * t
             }
         }
@@ -257,6 +269,26 @@ mod tests {
         Ok(())
     }
 
+    /// Regression: `LinearZero` used to extend the last segment's slope past
+    /// the final node (3%/5% at 1y/2y implied 7% at 3y); the contract is flat.
+    #[test]
+    fn extrapolation_is_flat_forward_and_flat_zero() -> R {
+        let r = d(REF.0, REF.1, REF.2);
+        let nodes = [(d(2027, 9, 23), (-0.03_f64).exp()), (d(2028, 9, 22), (-0.05_f64 * 2.0).exp())];
+        let lz = DiscountCurve::new(r, &nodes, Interpolation::LinearZero)?;
+        for far in [d(2029, 9, 22), d(2031, 9, 22), d(2046, 9, 22)] {
+            assert_abs_diff_eq!(lz.zero_rate(far)?, 0.05, epsilon = 1e-12);
+        }
+        let ll = DiscountCurve::new(r, &nodes, Interpolation::LogLinearDiscount)?;
+        let last_fwd = ll.forward_rate(d(2027, 9, 23), d(2028, 9, 22), DayCount::Act365Fixed)?;
+        let far_fwd = ll.forward_rate(d(2035, 9, 22), d(2036, 9, 21), DayCount::Act365Fixed)?;
+        assert_abs_diff_eq!(last_fwd, far_fwd, epsilon = 1e-12);
+        // Both extrapolations are monotone in DF.
+        assert!(lz.discount(d(2046, 9, 22))? < lz.discount(d(2029, 9, 22))?);
+        assert!(ll.discount(d(2046, 9, 22))? < ll.discount(d(2029, 9, 22))?);
+        Ok(())
+    }
+
     #[test]
     fn parallel_and_bucket_shifts() -> R {
         let r = d(REF.0, REF.1, REF.2);
@@ -268,7 +300,11 @@ mod tests {
         assert_eq!(c.node_date(1)?, d(2028, 9, 22));
         assert_abs_diff_eq!(c.node_zero_rate(1)?, c.zero_rate(d(2028, 9, 22))?, epsilon = 1e-15);
         assert!(matches!(c.with_node_shift(2, 1e-4), Err(CurveError::NodeOutOfRange { index: 2, nodes: 2 })));
-        let rebuilt = DiscountCurve::from_zero_rates(r, &[(d(2027, 9, 23), c.node_zero_rate(0)?), (d(2028, 9, 22), c.node_zero_rate(1)?)], Interpolation::LogLinearDiscount)?;
+        let rebuilt = DiscountCurve::from_zero_rates(
+            r,
+            &[(d(2027, 9, 23), c.node_zero_rate(0)?), (d(2028, 9, 22), c.node_zero_rate(1)?)],
+            Interpolation::LogLinearDiscount,
+        )?;
         assert_abs_diff_eq!(rebuilt.discount(date)?, c.discount(date)?, epsilon = 1e-15);
         let bucket = c.with_node_shift(1, 1e-4)?;
         assert_abs_diff_eq!(bucket.discount(d(2027, 9, 23))?, 0.96, epsilon = 1e-15);
