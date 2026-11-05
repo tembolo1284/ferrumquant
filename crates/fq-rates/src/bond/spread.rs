@@ -122,11 +122,8 @@ pub fn asset_swap_spread(bond: &FixedRateBond, clean_price: f64, settle: Date, c
     let curve_pv = npv_with_spread(bond, curve, settle, 0.0)?;
     let df_settle = curve.discount(settle)?;
     let swap = OisSwap::usd_sofr(settle, bond.maturity(), SwapSide::PayFixed, 1.0, 0.0)?;
-    let annuity: f64 = swap
-        .periods()
-        .iter()
-        .map(|p| curve.discount(p.payment_date).map(|df| p.fixed_year_fraction * df / df_settle))
-        .sum::<Result<f64, CurveError>>()?;
+    let annuity: f64 =
+        swap.periods().iter().map(|p| curve.discount(p.payment_date).map(|df| p.fixed_year_fraction * df / df_settle)).sum::<Result<f64, CurveError>>()?;
     Ok((curve_pv - dirty) / (bond.face() * annuity))
 }
 

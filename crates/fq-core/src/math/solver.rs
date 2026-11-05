@@ -36,11 +36,7 @@ fn finite(x: f64, fx: f64) -> Result<f64, SolverError> {
 }
 
 fn check_bracket(lo: f64, hi: f64, f_lo: f64, f_hi: f64) -> Result<(), SolverError> {
-    if (f_lo > 0.0 && f_hi > 0.0) || (f_lo < 0.0 && f_hi < 0.0) {
-        Err(SolverError::NotBracketed { lo, hi, f_lo, f_hi })
-    } else {
-        Ok(())
-    }
+    if (f_lo > 0.0 && f_hi > 0.0) || (f_lo < 0.0 && f_hi < 0.0) { Err(SolverError::NotBracketed { lo, hi, f_lo, f_hi }) } else { Ok(()) }
 }
 
 /// Brent's method on [lo, hi]; `f(lo)` and `f(hi)` must differ in sign.
@@ -122,13 +118,7 @@ pub fn brent(mut f: impl FnMut(f64) -> f64, lo: f64, hi: f64, cfg: SolverConfig)
 /// Safeguarded Newton on [lo, hi]. `f` returns (value, derivative).
 /// Falls back to bisection when a Newton step leaves the bracket or stalls.
 #[allow(clippy::float_cmp)]
-pub fn newton_safe(
-    mut f: impl FnMut(f64) -> (f64, f64),
-    guess: f64,
-    lo: f64,
-    hi: f64,
-    cfg: SolverConfig,
-) -> Result<f64, SolverError> {
+pub fn newton_safe(mut f: impl FnMut(f64) -> (f64, f64), guess: f64, lo: f64, hi: f64, cfg: SolverConfig) -> Result<f64, SolverError> {
     let f_lo = finite(lo, f(lo).0)?;
     let f_hi = finite(hi, f(hi).0)?;
     if f_lo == 0.0 {
@@ -181,12 +171,7 @@ pub fn newton_safe(
 }
 
 /// Geometrically expand [lo, hi] (factor 1.6) until it brackets a root.
-pub fn bracket(
-    mut f: impl FnMut(f64) -> f64,
-    lo: f64,
-    hi: f64,
-    max_expansions: usize,
-) -> Result<(f64, f64), SolverError> {
+pub fn bracket(mut f: impl FnMut(f64) -> f64, lo: f64, hi: f64, max_expansions: usize) -> Result<(f64, f64), SolverError> {
     const FACTOR: f64 = 1.6;
     let (mut a, mut b) = (lo, hi);
     let mut fa = finite(a, f(a))?;

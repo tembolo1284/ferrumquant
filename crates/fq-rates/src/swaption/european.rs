@@ -161,7 +161,14 @@ impl Swaption {
     }
 
     /// Shifted-lognormal vol that reproduces `pv` (currency units).
-    pub fn implied_lognormal_vol(&self, index: &OvernightIndex, projection: &DiscountCurve, discount: &DiscountCurve, shift: f64, pv: f64) -> Result<f64, SwaptionError> {
+    pub fn implied_lognormal_vol(
+        &self,
+        index: &OvernightIndex,
+        projection: &DiscountCurve,
+        discount: &DiscountCurve,
+        shift: f64,
+        pv: f64,
+    ) -> Result<f64, SwaptionError> {
         let t = discount.time(self.expiry);
         let (forward, annuity) = self.forward_and_annuity(index, projection, discount)?;
         Ok(shifted_black_implied_vol(self.kind.option_type(), forward, self.strike(), t, shift, pv / annuity, 5.0)?)

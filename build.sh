@@ -10,13 +10,14 @@ cd "$(dirname "$0")"
 # "labelled" by where they live (e.g. fq-rates/src/swap/... -> "swap::").
 # Add new products here as their modules land.
 # ---------------------------------------------------------------------------
-PRODUCTS_ALL="date daycount calendar schedule period imm time solver black interp sabr core bond spread future delivery deposit sofr-future curve jacobian index swap swaption volcube capfloor golden rates fx-barrier"
+PRODUCTS_ALL="date daycount calendar markets schedule period imm time solver black interp sabr core bond spread future delivery deposit sofr-future curve jacobian index swap swaption volcube capfloor golden rates currency fx-forward fx-vanilla fx-vol fx"
 
 product_target() {
     case "$1" in
         date)       echo "fq-core time::date::" ;;
         daycount)   echo "fq-core time::daycount::" ;;
         calendar)   echo "fq-core time::calendar::" ;;
+        markets)    echo "fq-core time::markets::" ;;
         schedule)   echo "fq-core time::schedule::" ;;
         period)     echo "fq-core time::period::" ;;
         imm)        echo "fq-core time::imm::" ;;
@@ -41,21 +42,26 @@ product_target() {
         jacobian)   echo "fq-rates curve::jacobian::" ;;
         index)      echo "fq-rates index::" ;;
         rates)      echo "fq-rates -" ;;
-        fx-barrier) echo "fq-fx barrier::" ;;
+        currency)   echo "fq-fx currency::" ;;
+        fx-forward) echo "fq-fx forward::" ;;
+        fx-vanilla) echo "fq-fx vanilla::" ;;
+        fx-vol)     echo "fq-fx vol_surface::" ;;
+        fx)         echo "fq-fx -" ;;
         *)          return 1 ;;
     esac
 }
 
 # Python-side products: name -> pytest file under python/tests.
 # `-p py-NAME` with `--py test` runs just that file; `-t` adds a -k filter.
-PY_PRODUCTS_ALL="py-bond py-curve py-swap py-swaption"
+PY_PRODUCTS_ALL="py-bond py-curve py-swap py-future py-vol"
 
 py_product_target() {
     case "$1" in
         py-bond)     echo "test_bonds.py" ;;
         py-curve)    echo "test_curves.py" ;;
         py-swap)     echo "test_swaps.py" ;;
-        py-swaption) echo "test_swaptions.py" ;;
+        py-future)   echo "test_futures.py" ;;
+        py-vol)      echo "test_vol.py" ;;
         *)           return 1 ;;
     esac
 }

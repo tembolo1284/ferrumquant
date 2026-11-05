@@ -17,6 +17,7 @@
 
 use thiserror::Error;
 
+use fq_core::math::{BlackError, OptionType, SabrError, SolverError};
 use fq_core::time::{BusinessDayConvention, Date, DateError, Period, PeriodError};
 use fq_rates::curve::{CurveError, DiscountCurve, Interpolation};
 
@@ -46,6 +47,24 @@ pub enum FxError {
     CurrencyNotInPair(Currency, CurrencyPair),
     #[error("need at least one forward point quote")]
     NoQuotes,
+    #[error(transparent)]
+    Black(BlackError),
+    #[error(transparent)]
+    Solver(SolverError),
+    #[error("invalid smile input: {0}")]
+    InvalidSmileInput(String),
+    #[error("delta {delta} is not attainable by a {kind:?} (limit {max})")]
+    DeltaOutOfRange { delta: f64, kind: OptionType, max: f64 },
+    #[error("option expiry {expiry} is not after the trade date {trade_date}")]
+    Expired { expiry: Date, trade_date: Date },
+    #[error("smile for {tenor} needs an ATM vol and matching risk reversal / butterfly pairs")]
+    BadSmileQuote { tenor: Period },
+    #[error("vol surface needs at least one expiry")]
+    NoExpiries,
+    #[error(transparent)]
+    Sabr(#[from] SabrError),
+    #[error("smile calibration for {tenor} did not converge (rmse {rmse})")]
+    SmileNotConverged { tenor: Period, rmse: f64 },
 }
 
 /// Spot and the two discount curves for a pair, as of one trade date.

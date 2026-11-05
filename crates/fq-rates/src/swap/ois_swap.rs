@@ -12,8 +12,8 @@ pub type Tenor = Period;
 use thiserror::Error;
 
 use fq_core::time::{
-    BusinessDayConvention, Calendar, Date, DateError, DayCount, DayCountError, Frequency, JoinRule,
-    Market, Period, PeriodError, Schedule, ScheduleError, ScheduleSpec,
+    BusinessDayConvention, Calendar, Date, DateError, DayCount, DayCountError, Frequency, JoinRule, Market, Period, PeriodError, Schedule, ScheduleError,
+    ScheduleSpec,
 };
 
 use crate::curve::{CurveError, DiscountCurve};
@@ -136,9 +136,7 @@ impl OisSwap {
     /// USD SOFR OIS between explicit (unadjusted) effective and maturity dates.
     pub fn usd_sofr(effective: Date, maturity: Date, side: SwapSide, notional: f64, fixed_rate: f64) -> Result<Self, SwapError> {
         let cal = Self::usd_sofr_calendar();
-        let schedule = ScheduleSpec::new(effective, maturity, Frequency::Annual, cal.clone())
-            .convention(BusinessDayConvention::ModifiedFollowing)
-            .build()?;
+        let schedule = ScheduleSpec::new(effective, maturity, Frequency::Annual, cal.clone()).convention(BusinessDayConvention::ModifiedFollowing).build()?;
         Self::new(schedule, side, notional, fixed_rate, DayCount::Act360, 2, cal, CompoundingConvention::default())
     }
 
@@ -198,7 +196,13 @@ impl OisSwap {
     pub fn fixed_cashflows(&self) -> Vec<SwapCashflow> {
         self.periods
             .iter()
-            .map(|p| SwapCashflow { accrual_start: p.accrual_start, accrual_end: p.accrual_end, payment_date: p.payment_date, rate: self.fixed_rate, amount: p.fixed_amount })
+            .map(|p| SwapCashflow {
+                accrual_start: p.accrual_start,
+                accrual_end: p.accrual_end,
+                payment_date: p.payment_date,
+                rate: self.fixed_rate,
+                amount: p.fixed_amount,
+            })
             .collect()
     }
 
@@ -210,7 +214,13 @@ impl OisSwap {
             .map(|p| {
                 let factor = index.compounded_factor(p.accrual_start, p.accrual_end, Some(projection), self.compounding)?;
                 let rate = self.rate_from_factor(index, p, factor)?;
-                Ok(SwapCashflow { accrual_start: p.accrual_start, accrual_end: p.accrual_end, payment_date: p.payment_date, rate, amount: self.notional * (factor - 1.0) })
+                Ok(SwapCashflow {
+                    accrual_start: p.accrual_start,
+                    accrual_end: p.accrual_end,
+                    payment_date: p.payment_date,
+                    rate,
+                    amount: self.notional * (factor - 1.0),
+                })
             })
             .collect()
     }
@@ -246,13 +256,7 @@ impl OisSwap {
             return Err(SwapError::Expired(today));
         }
 
-        Ok(SwapValuation {
-            npv: self.side.sign() * (float_leg_pv - fixed_leg_pv),
-            fixed_leg_pv,
-            float_leg_pv,
-            annuity,
-            par_rate: float_leg_pv / annuity,
-        })
+        Ok(SwapValuation { npv: self.side.sign() * (float_leg_pv - fixed_leg_pv), fixed_leg_pv, float_leg_pv, annuity, par_rate: float_leg_pv / annuity })
     }
 
     /// Single-curve NPV (projection = discount).

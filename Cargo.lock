@@ -33,6 +33,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fq-fx"
+version = "0.1.0"
+dependencies = [
+ "approx",
+ "fq-core",
+ "fq-rates",
+ "thiserror",
+]
+
+[[package]]
 name = "fq-py"
 version = "0.1.0"
 dependencies = [

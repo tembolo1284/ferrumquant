@@ -92,12 +92,7 @@ impl TreasuryContract {
 
     pub const fn eligibility(self) -> Eligibility {
         const fn e(min: i32, max: Option<i32>, from_last: bool, orig: Option<i32>) -> Eligibility {
-            Eligibility {
-                min_remaining_months: min,
-                max_remaining_months: max,
-                max_from_last_day: from_last,
-                max_original_months: orig,
-            }
+            Eligibility { min_remaining_months: min, max_remaining_months: max, max_from_last_day: from_last, max_original_months: orig }
         }
         match self {
             Self::TwoYear => e(21, Some(24), true, Some(63)),
@@ -229,7 +224,13 @@ pub fn conversion_factor(contract: TreasuryContract, coupon: f64, maturity: Date
     }
     let cpn = round_coupon_to_eighth(coupon);
 
-    let v = if z < 7 { z } else if quarterly { 3 } else { z - 6 };
+    let v = if z < 7 {
+        z
+    } else if quarterly {
+        3
+    } else {
+        z - 6
+    };
     let a = 1.03_f64.powf(-f64::from(v) / 6.0);
     let b = (cpn / 2.0) * f64::from(6 - v) / 6.0;
     let c = if z < 7 { 1.03_f64.powi(-2 * n) } else { 1.03_f64.powi(-(2 * n + 1)) };

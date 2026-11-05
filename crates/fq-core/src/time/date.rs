@@ -93,11 +93,7 @@ impl Date {
     }
 
     pub fn from_serial(serial: i32) -> Result<Self, DateError> {
-        if (Self::MIN.0..=Self::MAX.0).contains(&serial) {
-            Ok(Self(serial))
-        } else {
-            Err(DateError::OutOfRange)
-        }
+        if (Self::MIN.0..=Self::MAX.0).contains(&serial) { Ok(Self(serial)) } else { Err(DateError::OutOfRange) }
     }
 
     pub const fn serial(self) -> i32 {
@@ -316,7 +312,6 @@ mod tests {
         assert_eq!(Date::from_unix_days(i32::MAX), Err(DateError::OutOfRange));
         Ok(())
     }
-
 
     #[test]
     fn weekdays() -> R {

@@ -19,7 +19,7 @@
 
 use thiserror::Error;
 
-use fq_core::math::{BlackError, OptionType, bachelier, bachelier_implied_vol, brent, SolverConfig, SolverError};
+use fq_core::math::{BlackError, OptionType, SolverConfig, SolverError, bachelier, bachelier_implied_vol, brent};
 use fq_core::time::{BusinessDayConvention, Calendar, Date, DateError, DayCount, DayCountError, Frequency, Period, ScheduleError, ScheduleSpec};
 
 use crate::curve::{CurveError, DiscountCurve};
@@ -121,7 +121,14 @@ pub struct CapFloor {
 
 impl CapFloor {
     /// Caplets on the given floating-leg accrual periods.
-    pub fn from_swap_periods(kind: CapFloorType, notional: f64, strike: f64, periods: &[SwapPeriod], fixing_calendar: Calendar, compounding: CompoundingConvention) -> Self {
+    pub fn from_swap_periods(
+        kind: CapFloorType,
+        notional: f64,
+        strike: f64,
+        periods: &[SwapPeriod],
+        fixing_calendar: Calendar,
+        compounding: CompoundingConvention,
+    ) -> Self {
         Self { kind, notional, strike, periods: periods.to_vec(), fixing_calendar, compounding }
     }
 
@@ -158,7 +165,13 @@ impl CapFloor {
         Ok(self.fixing_calendar.advance(p.accrual_end, -1)?)
     }
 
-    pub fn price(&self, index: &OvernightIndex, projection: &DiscountCurve, discount: &DiscountCurve, vols: &VolSource) -> Result<CapFloorPricing, CapFloorError> {
+    pub fn price(
+        &self,
+        index: &OvernightIndex,
+        projection: &DiscountCurve,
+        discount: &DiscountCurve,
+        vols: &VolSource,
+    ) -> Result<CapFloorPricing, CapFloorError> {
         let today = discount.reference_date();
         let kind = self.kind.option_type();
         let mut caplets = Vec::with_capacity(self.periods.len());
@@ -174,7 +187,17 @@ impl CapFloor {
             let df = discount.discount(p.payment_date)?;
             let scale = self.notional * p.fixed_year_fraction * df;
             let model = bachelier(kind, forward, self.strike, vol, t)?;
-            let c = CapletPricing { accrual_start: p.accrual_start, accrual_end: p.accrual_end, payment_date: p.payment_date, fixing_date, expiry_time: t, forward, vol, pv: scale * model.price, vega: scale * model.vega };
+            let c = CapletPricing {
+                accrual_start: p.accrual_start,
+                accrual_end: p.accrual_end,
+                payment_date: p.payment_date,
+                fixing_date,
+                expiry_time: t,
+                forward,
+                vol,
+                pv: scale * model.price,
+                vega: scale * model.vega,
+            };
             pv += c.pv;
             vega += c.vega;
             caplets.push(c);

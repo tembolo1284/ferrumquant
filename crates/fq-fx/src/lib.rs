@@ -7,9 +7,13 @@
 
 pub mod currency;
 pub mod forward;
+pub mod vanilla;
+pub mod vol_surface;
 
 pub use currency::{Currency, CurrencyError, CurrencyPair};
 pub use forward::{FxDirection, FxError, FxForward, FxForwardValuation, FxMarket, FxNdf};
+pub use vanilla::{AtmConvention, DeltaConvention, FxSlice, FxVanilla, FxVanillaValuation, PremiumCurrency, expiry_and_delivery};
+pub use vol_surface::{FxSmile, FxVolSurface, SmileQuote, SurfaceConfig, delivery_for_expiry};
 
 #[cfg(test)]
 mod thread_safety {
@@ -23,5 +27,7 @@ mod thread_safety {
         assert_send_sync::<FxMarket>();
         assert_send_sync::<FxForward>();
         assert_send_sync::<FxNdf>();
+        assert_send_sync::<FxVanilla>();
+        assert_send_sync::<FxVolSurface>();
     }
 }

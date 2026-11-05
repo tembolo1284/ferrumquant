@@ -151,8 +151,16 @@ fn golden_swaption_1y10y() -> R {
 fn golden_sofr_bootstrap_nodes() -> R {
     let today = d(2026, 9, 23);
     let quotes = [
-        ("1M", 0.0430), ("3M", 0.0425), ("6M", 0.0415), ("1Y", 0.0400), ("2Y", 0.0380),
-        ("3Y", 0.0375), ("5Y", 0.0378), ("7Y", 0.0385), ("10Y", 0.0395), ("30Y", 0.0410),
+        ("1M", 0.0430),
+        ("3M", 0.0425),
+        ("6M", 0.0415),
+        ("1Y", 0.0400),
+        ("2Y", 0.0380),
+        ("3Y", 0.0375),
+        ("5Y", 0.0378),
+        ("7Y", 0.0385),
+        ("10Y", 0.0395),
+        ("30Y", 0.0410),
     ];
     let instruments: Vec<_> = quotes.iter().map(|(t, r)| BootstrapInstrument::ois(t.parse().expect("tenor"), *r)).collect();
     let res = bootstrap_sofr(today, &OvernightIndex::sofr(), &instruments, BootstrapConfig::default())?;

@@ -211,11 +211,7 @@ impl Schedule {
             return Ok(RefPeriod::new(s, e));
         }
         let m = self.frequency.months();
-        if i == 0 {
-            Ok(RefPeriod::new(roll(e, -m, self.end_of_month)?, e))
-        } else {
-            Ok(RefPeriod::new(s, roll(s, m, self.end_of_month)?))
-        }
+        if i == 0 { Ok(RefPeriod::new(roll(e, -m, self.end_of_month)?, e)) } else { Ok(RefPeriod::new(s, roll(s, m, self.end_of_month)?)) }
     }
 }
 
@@ -350,8 +346,7 @@ mod tests {
     }
 
     fn ust(effective: Date, maturity: Date) -> ScheduleSpec {
-        ScheduleSpec::new(effective, maturity, Frequency::Semiannual, Calendar::new(Market::UsGovernmentBond))
-            .convention(C::Unadjusted)
+        ScheduleSpec::new(effective, maturity, Frequency::Semiannual, Calendar::new(Market::UsGovernmentBond)).convention(C::Unadjusted)
     }
 
     #[test]
@@ -366,15 +361,9 @@ mod tests {
     #[test]
     fn end_of_month_rule() -> R {
         let eom = ust(d(2026, 2, 28), d(2028, 2, 29)).end_of_month(true).build()?;
-        assert_eq!(
-            eom.dates(),
-            &[d(2026, 2, 28), d(2026, 8, 31), d(2027, 2, 28), d(2027, 8, 31), d(2028, 2, 29)]
-        );
+        assert_eq!(eom.dates(), &[d(2026, 2, 28), d(2026, 8, 31), d(2027, 2, 28), d(2027, 8, 31), d(2028, 2, 29)]);
         let plain = ust(d(2026, 2, 28), d(2028, 2, 29)).build()?;
-        assert_eq!(
-            plain.dates(),
-            &[d(2026, 2, 28), d(2026, 8, 29), d(2027, 2, 28), d(2027, 8, 29), d(2028, 2, 29)]
-        );
+        assert_eq!(plain.dates(), &[d(2026, 2, 28), d(2026, 8, 29), d(2027, 2, 28), d(2027, 8, 29), d(2028, 2, 29)]);
         Ok(())
     }
 
@@ -399,8 +388,7 @@ mod tests {
 
     #[test]
     fn forward_with_short_last_stub() -> R {
-        let spec = ScheduleSpec::new(d(2026, 1, 15), d(2027, 3, 1), Frequency::Quarterly, Calendar::new(Market::UsSettlement))
-            .rule(DateGeneration::Forward);
+        let spec = ScheduleSpec::new(d(2026, 1, 15), d(2027, 3, 1), Frequency::Quarterly, Calendar::new(Market::UsSettlement)).rule(DateGeneration::Forward);
         let s = spec.build()?;
         assert_eq!(s.dates().last(), Some(&d(2027, 3, 1)));
         assert_eq!(s.dates()[s.periods() - 1], d(2027, 1, 15));
@@ -423,9 +411,7 @@ mod tests {
         let cal = Calendar::new(Market::WeekendsOnly);
         let bad = ScheduleSpec::new(d(2027, 1, 1), d(2026, 1, 1), Frequency::Annual, cal.clone()).build();
         assert!(matches!(bad, Err(ScheduleError::Invalid(_))));
-        let bad_stub = ScheduleSpec::new(d(2026, 1, 1), d(2027, 1, 1), Frequency::Annual, cal)
-            .first_date(d(2025, 6, 1))
-            .build();
+        let bad_stub = ScheduleSpec::new(d(2026, 1, 1), d(2027, 1, 1), Frequency::Annual, cal).first_date(d(2025, 6, 1)).build();
         assert!(matches!(bad_stub, Err(ScheduleError::Invalid(_))));
     }
 

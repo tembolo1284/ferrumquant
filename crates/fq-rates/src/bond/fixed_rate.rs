@@ -10,8 +10,7 @@ use thiserror::Error;
 
 use fq_core::math::{SolverConfig, SolverError, newton_safe};
 use fq_core::time::{
-    BusinessDayConvention, Calendar, Date, DateError, DayCount, DayCountError, Frequency, Market,
-    RefPeriod, Schedule, ScheduleError, ScheduleSpec,
+    BusinessDayConvention, Calendar, Date, DateError, DayCount, DayCountError, Frequency, Market, RefPeriod, Schedule, ScheduleError, ScheduleSpec,
 };
 
 use crate::curve::{CurveError, DiscountCurve};
@@ -96,28 +95,14 @@ impl FixedRateBond {
             })
             .collect::<Result<Vec<_>, BondError>>()?;
         let redemption_date = coupons.last().map_or(schedule.dates()[0], |c| c.payment_date);
-        Ok(Self {
-            coupons,
-            coupon_rate,
-            face,
-            frequency: schedule.frequency(),
-            day_count,
-            calendar,
-            settlement_days,
-            redemption_date,
-        })
+        Ok(Self { coupons, coupon_rate, face, frequency: schedule.frequency(), day_count, calendar, settlement_days, redemption_date })
     }
 
     /// US Treasury note/bond: semiannual ACT/ACT ICMA on unadjusted coupon
     /// dates, payments Following on the SIFMA calendar, T+1 settlement, EOM
     /// rule when the maturity is a month end. `first_coupon` handles odd
     /// (long) first coupons; short first coupons need no extra input.
-    pub fn us_treasury(
-        dated_date: Date,
-        maturity: Date,
-        coupon_rate: f64,
-        first_coupon: Option<Date>,
-    ) -> Result<Self, BondError> {
+    pub fn us_treasury(dated_date: Date, maturity: Date, coupon_rate: f64, first_coupon: Option<Date>) -> Result<Self, BondError> {
         let calendar = Calendar::new(Market::UsGovernmentBond);
         let mut spec = ScheduleSpec::new(dated_date, maturity, Frequency::Semiannual, calendar.clone())
             .convention(BusinessDayConvention::Unadjusted)
@@ -125,15 +110,7 @@ impl FixedRateBond {
         if let Some(fc) = first_coupon {
             spec = spec.first_date(fc);
         }
-        Self::new(
-            &spec.build()?,
-            coupon_rate,
-            100.0,
-            DayCount::ActActIcma,
-            calendar,
-            BusinessDayConvention::Following,
-            1,
-        )
+        Self::new(&spec.build()?, coupon_rate, 100.0, DayCount::ActActIcma, calendar, BusinessDayConvention::Following, 1)
     }
 
     pub fn coupons(&self) -> &[Coupon] {

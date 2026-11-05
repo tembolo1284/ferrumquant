@@ -1,14 +1,13 @@
 //! ferrumquant rates: indices, curves, bonds, bond futures, swaps, and swaptions.
 
 pub mod bond;
+pub mod capfloor;
 pub mod curve;
 pub mod future;
 pub mod index;
 pub mod instrument;
 pub mod swap;
 pub mod swaption;
-pub mod capfloor;
-
 
 // Everything a risk engine shares across threads must stay plain owned data
 // (no Rc/RefCell/Cell). This fails to compile if that ever changes.

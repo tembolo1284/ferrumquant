@@ -65,12 +65,7 @@ impl DayCount {
         }
     }
 
-    pub fn year_fraction(
-        self,
-        d1: Date,
-        d2: Date,
-        ref_period: Option<RefPeriod>,
-    ) -> Result<f64, DayCountError> {
+    pub fn year_fraction(self, d1: Date, d2: Date, ref_period: Option<RefPeriod>) -> Result<f64, DayCountError> {
         match self {
             Self::Act360 => Ok(f64::from(d2 - d1) / 360.0),
             Self::Act365Fixed => Ok(f64::from(d2 - d1) / 365.0),
@@ -105,12 +100,7 @@ impl fmt::Display for DayCount {
 impl FromStr for DayCount {
     type Err = DayCountError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let key: String = s
-            .to_ascii_uppercase()
-            .replace("ACTUAL", "ACT")
-            .chars()
-            .filter(|c| !matches!(c, ' ' | '-' | '_'))
-            .collect();
+        let key: String = s.to_ascii_uppercase().replace("ACTUAL", "ACT").chars().filter(|c| !matches!(c, ' ' | '-' | '_')).collect();
         Ok(match key.as_str() {
             "ACT/360" | "A360" => Self::Act360,
             "ACT/365F" | "ACT/365FIXED" | "ACT/365" | "A365F" => Self::Act365Fixed,
@@ -179,9 +169,7 @@ fn act_act_isda(d1: Date, d2: Date) -> Result<f64, DayCountError> {
     }
     let next_jan1 = Date::from_ymd(y1 + 1, 1, 1)?;
     let last_jan1 = Date::from_ymd(y2, 1, 1)?;
-    Ok(f64::from(next_jan1 - d1) / days_in_year(y1)
-        + f64::from(y2 - y1 - 1)
-        + f64::from(d2 - last_jan1) / days_in_year(y2))
+    Ok(f64::from(next_jan1 - d1) / days_in_year(y1) + f64::from(y2 - y1 - 1) + f64::from(d2 - last_jan1) / days_in_year(y2))
 }
 
 fn act_act_icma(d1: Date, d2: Date, rs: Date, re: Date) -> Result<f64, DayCountError> {

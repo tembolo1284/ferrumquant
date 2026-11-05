@@ -66,11 +66,7 @@ pub struct DeliveryOptionResult {
 
 impl DeliveryOptionResult {
     pub fn most_likely_ctd(&self) -> usize {
-        self.ctd_probability
-            .iter()
-            .enumerate()
-            .fold((0, f64::NEG_INFINITY), |(bi, bv), (i, &v)| if v > bv { (i, v) } else { (bi, bv) })
-            .0
+        self.ctd_probability.iter().enumerate().fold((0, f64::NEG_INFINITY), |(bi, bv), (i, &v)| if v > bv { (i, v) } else { (bi, bv) }).0
     }
 }
 
@@ -129,10 +125,7 @@ pub fn delivery_option(
             *c = price / b.conversion_factor;
             *e += w * *c;
         }
-        let (ctd, min) = converted
-            .iter()
-            .enumerate()
-            .fold((0, f64::INFINITY), |(bi, bv), (i, &v)| if v < bv { (i, v) } else { (bi, bv) });
+        let (ctd, min) = converted.iter().enumerate().fold((0, f64::INFINITY), |(bi, bv), (i, &v)| if v < bv { (i, v) } else { (bi, bv) });
         fair_price += w * min;
         ctd_probability[ctd] += w;
     }
@@ -229,7 +222,10 @@ mod tests {
     fn errors() -> R {
         let f = zn_h27()?;
         let (s, dd) = (d(SETTLE.0, SETTLE.1, SETTLE.2), d(DELIVERY.0, DELIVERY.1, DELIVERY.2));
-        assert!(matches!(delivery_option(&f, &[99.0], s, dd, 0.04, DeliveryOptionConfig::default()), Err(DeliveryOptionError::Future(FutureError::LengthMismatch { .. }))));
+        assert!(matches!(
+            delivery_option(&f, &[99.0], s, dd, 0.04, DeliveryOptionConfig::default()),
+            Err(DeliveryOptionError::Future(FutureError::LengthMismatch { .. }))
+        ));
         assert!(matches!(delivery_option(&f, &[96.75, 99.25], dd, s, 0.04, DeliveryOptionConfig::default()), Err(DeliveryOptionError::InvalidWindow { .. })));
         let bad = DeliveryOptionConfig { yield_vol: -0.01, ..Default::default() };
         assert!(matches!(delivery_option(&f, &[96.75, 99.25], s, dd, 0.04, bad), Err(DeliveryOptionError::NegativeVol(_))));

@@ -121,11 +121,7 @@ impl OvernightIndex {
             // A non-business accrual day belongs to the preceding fixing.
             let accrual_day = cal.adjust(d, BusinessDayConvention::Preceding)?;
             let observation_date = cal.advance(accrual_day, -conv.lookback_days)?;
-            let days = if conv.observation_shift && conv.lookback_days > 0 {
-                cal.advance(observation_date, 1)? - observation_date
-            } else {
-                next - d
-            };
+            let days = if conv.observation_shift && conv.lookback_days > 0 { cal.advance(observation_date, 1)? - observation_date } else { next - d };
             out.push(ObservationPeriod { observation_date, days });
             d = next;
         }
@@ -179,11 +175,7 @@ impl OvernightIndex {
         }
         let Some(c) = curve else { return Ok(None) };
         let cal = &self.fixing_calendar;
-        if start < c.reference_date()
-            || !cal.is_business_day(start)
-            || !cal.is_business_day(end)
-            || self.fixings.range(start..end).next().is_some()
-        {
+        if start < c.reference_date() || !cal.is_business_day(start) || !cal.is_business_day(end) || self.fixings.range(start..end).next().is_some() {
             return Ok(None);
         }
         Ok(Some(c.discount(start)? / c.discount(end)?))
@@ -322,10 +314,7 @@ mod tests {
         let (s, e) = (d(2026, 9, 25), d(2027, 9, 27));
         let plain = CompoundingConvention::default();
         // Lookback or lockout: slow path, and the result differs from DF ratio.
-        for conv in [
-            CompoundingConvention { lookback_days: 2, ..Default::default() },
-            CompoundingConvention { lockout_days: 2, ..Default::default() },
-        ] {
+        for conv in [CompoundingConvention { lookback_days: 2, ..Default::default() }, CompoundingConvention { lockout_days: 2, ..Default::default() }] {
             assert!(idx.telescoped(s, e, Some(&curve), conv)?.is_none());
             assert_abs_diff_eq!(idx.compounded_factor(s, e, Some(&curve), conv)?, idx.compounded_factor_slow(s, e, Some(&curve), conv)?, epsilon = 1e-15);
         }

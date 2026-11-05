@@ -75,11 +75,7 @@ struct CarryTerms {
 impl TreasuryFuture {
     /// Keeps the candidates deliverable into `contract`/`delivery` and
     /// attaches their conversion factors, preserving input order.
-    pub fn new(
-        contract: TreasuryContract,
-        delivery: DeliveryMonth,
-        candidates: impl IntoIterator<Item = FixedRateBond>,
-    ) -> Result<Self, FutureError> {
+    pub fn new(contract: TreasuryContract, delivery: DeliveryMonth, candidates: impl IntoIterator<Item = FixedRateBond>) -> Result<Self, FutureError> {
         let mut basket = Vec::new();
         for bond in candidates {
             let Some(dated) = bond.coupons().first().map(|c| c.accrual_start) else { continue };
@@ -115,11 +111,7 @@ impl TreasuryFuture {
     /// business day after it (ZT, Z3N, ZF).
     pub fn last_delivery_date(&self) -> Result<Date, FutureError> {
         let last_trading = self.calendar.adjust(self.delivery.last_day()?, BusinessDayConvention::Preceding)?;
-        if self.contract.is_short_end() {
-            Ok(self.calendar.advance(last_trading, 3)?)
-        } else {
-            Ok(last_trading)
-        }
+        if self.contract.is_short_end() { Ok(self.calendar.advance(last_trading, 3)?) } else { Ok(last_trading) }
     }
 
     /// Invoice price per 100 face: F * CF + accrued at delivery.
@@ -185,23 +177,13 @@ impl TreasuryFuture {
         repo: f64,
     ) -> Result<(usize, Vec<BasisAnalytics>), FutureError> {
         self.check_prices(clean_prices)?;
-        let all = clean_prices
-            .iter()
-            .enumerate()
-            .map(|(i, &p)| self.basis(i, p, futures_price, settle, delivery_date, repo))
-            .collect::<Result<Vec<_>, _>>()?;
+        let all = clean_prices.iter().enumerate().map(|(i, &p)| self.basis(i, p, futures_price, settle, delivery_date, repo)).collect::<Result<Vec<_>, _>>()?;
         let ctd = argmax(all.iter().map(|b| b.implied_repo));
         Ok((ctd, all))
     }
 
     /// CTD-only fair futures price, min_i forward_clean_i / CF_i, with the index achieving it.
-    pub fn fair_price(
-        &self,
-        clean_prices: &[f64],
-        settle: Date,
-        delivery_date: Date,
-        repo: f64,
-    ) -> Result<(usize, f64), FutureError> {
+    pub fn fair_price(&self, clean_prices: &[f64], settle: Date, delivery_date: Date, repo: f64) -> Result<(usize, f64), FutureError> {
         self.check_prices(clean_prices)?;
         let converted = clean_prices
             .iter()
@@ -251,10 +233,7 @@ fn forward_clean(t: &CarryTerms, repo: f64) -> f64 {
 }
 
 fn argmax(values: impl Iterator<Item = f64>) -> usize {
-    values
-        .enumerate()
-        .fold((0, f64::NEG_INFINITY), |(bi, bv), (i, v)| if v > bv { (i, v) } else { (bi, bv) })
-        .0
+    values.enumerate().fold((0, f64::NEG_INFINITY), |(bi, bv), (i, v)| if v > bv { (i, v) } else { (bi, bv) }).0
 }
 
 #[cfg(test)]
@@ -354,14 +333,8 @@ mod tests {
     fn errors() -> R {
         let f = zn_h27()?;
         assert!(matches!(f.invoice_price(5, 110.0, d(2027, 3, 31)), Err(FutureError::IndexOutOfRange(5))));
-        assert!(matches!(
-            f.cheapest_to_deliver(&[99.0], 110.0, d(2027, 1, 4), d(2027, 3, 31), 0.04),
-            Err(FutureError::LengthMismatch { .. })
-        ));
-        assert!(matches!(
-            f.basis(0, 99.0, 110.0, d(2027, 4, 1), d(2027, 3, 31), 0.04),
-            Err(FutureError::InvalidWindow { .. })
-        ));
+        assert!(matches!(f.cheapest_to_deliver(&[99.0], 110.0, d(2027, 1, 4), d(2027, 3, 31), 0.04), Err(FutureError::LengthMismatch { .. })));
+        assert!(matches!(f.basis(0, 99.0, 110.0, d(2027, 4, 1), d(2027, 3, 31), 0.04), Err(FutureError::InvalidWindow { .. })));
         let empty = TreasuryFuture::new(TreasuryContract::UltraBond, DeliveryMonth::new(2027, 3)?, [ust(d(2026, 8, 15), d(2036, 8, 15), 0.04)]);
         assert!(matches!(empty, Err(FutureError::EmptyBasket { .. })));
         Ok(())
