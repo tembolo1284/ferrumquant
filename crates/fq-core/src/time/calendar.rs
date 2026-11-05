@@ -16,6 +16,7 @@ use std::str::FromStr;
 use thiserror::Error;
 
 use super::date::{Date, DateError, Weekday};
+use super::markets::{japan_holiday, target_holiday, uk_settlement_holiday};
 
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum CalendarError {
@@ -57,11 +58,7 @@ impl fmt::Display for BusinessDayConvention {
 impl FromStr for BusinessDayConvention {
     type Err = CalendarError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let key: String = s
-            .to_ascii_uppercase()
-            .chars()
-            .filter(|c| !matches!(c, ' ' | '-' | '_'))
-            .collect();
+        let key: String = s.to_ascii_uppercase().chars().filter(|c| !matches!(c, ' ' | '-' | '_')).collect();
         Ok(match key.as_str() {
             "F" | "FOLLOWING" => Self::Following,
             "MF" | "MODFOLLOWING" | "MODIFIEDFOLLOWING" => Self::ModifiedFollowing,
@@ -82,6 +79,12 @@ pub enum Market {
     UsSettlement,
     /// US government securities (SIFMA recommendations), code "USGS".
     UsGovernmentBond,
+    /// TARGET2 Eurosystem payment days, code "TARGET".
+    Target,
+    /// UK bank holidays (England and Wales), code "UKLN".
+    UkSettlement,
+    /// Japanese public holidays, code "JPTO".
+    Japan,
 }
 
 impl Market {
@@ -90,6 +93,9 @@ impl Market {
             Self::WeekendsOnly => "WEEKENDS",
             Self::UsSettlement => "USNY",
             Self::UsGovernmentBond => "USGS",
+            Self::Target => "TARGET",
+            Self::UkSettlement => "UKLN",
+            Self::Japan => "JPTO",
         }
     }
 
@@ -102,6 +108,9 @@ impl Market {
             Self::WeekendsOnly => false,
             Self::UsSettlement => us_settlement_holiday(d, w),
             Self::UsGovernmentBond => us_government_bond_holiday(d, w),
+            Self::Target => target_holiday(d, w),
+            Self::UkSettlement => uk_settlement_holiday(d, w),
+            Self::Japan => japan_holiday(d, w),
         }
     }
 }
@@ -113,6 +122,9 @@ impl FromStr for Market {
             "WEEKENDS" | "WEEKENDSONLY" => Self::WeekendsOnly,
             "USNY" | "US-SETTLEMENT" | "USSETTLEMENT" | "NYC" => Self::UsSettlement,
             "USGS" | "SIFMA" | "US-GOVBOND" | "USGOVERNMENTBOND" => Self::UsGovernmentBond,
+            "TARGET" | "TARGET2" | "EUTA" | "EUR" => Self::Target,
+            "UKLN" | "GBLO" | "LONDON" | "UK" | "GBP" => Self::UkSettlement,
+            "JPTO" | "TOKYO" | "JAPAN" | "JPY" => Self::Japan,
             _ => return Err(CalendarError::UnknownCalendar(s.to_owned())),
         })
     }
@@ -146,8 +158,13 @@ impl Calendar {
     }
 
     pub fn joint(markets: impl IntoIterator<Item = Market>, join: JoinRule) -> Self {
-        let mut markets: Vec<Market> = markets.into_iter().collect();
-        markets.dedup();
+        let mut unique: Vec<Market> = Vec::new();
+        for m in markets {
+            if !unique.contains(&m) {
+                unique.push(m);
+            }
+        }
+        let mut markets = unique;
         if markets.is_empty() {
             markets.push(Market::WeekendsOnly);
         }
@@ -175,19 +192,11 @@ impl Calendar {
             C::Unadjusted => Ok(d),
             C::Following | C::ModifiedFollowing => {
                 let adj = self.roll(d, 1)?;
-                if bdc == C::ModifiedFollowing && adj.month() != d.month() {
-                    self.roll(d, -1)
-                } else {
-                    Ok(adj)
-                }
+                if bdc == C::ModifiedFollowing && adj.month() != d.month() { self.roll(d, -1) } else { Ok(adj) }
             }
             C::Preceding | C::ModifiedPreceding => {
                 let adj = self.roll(d, -1)?;
-                if bdc == C::ModifiedPreceding && adj.month() != d.month() {
-                    self.roll(d, 1)
-                } else {
-                    Ok(adj)
-                }
+                if bdc == C::ModifiedPreceding && adj.month() != d.month() { self.roll(d, 1) } else { Ok(adj) }
             }
         }
     }
@@ -208,10 +217,7 @@ impl Calendar {
     /// Business days in [from, to) (negative if to < from).
     pub fn business_days_between(&self, from: Date, to: Date) -> i32 {
         let (lo, hi, sign) = if from <= to { (from, to, 1) } else { (to, from, -1) };
-        let count = (lo.serial()..hi.serial())
-            .filter_map(|s| Date::from_serial(s).ok())
-            .filter(|&d| self.is_business_day(d))
-            .count() as i32;
+        let count = (lo.serial()..hi.serial()).filter_map(|s| Date::from_serial(s).ok()).filter(|&d| self.is_business_day(d)).count() as i32;
         sign * count
     }
 
@@ -249,11 +255,7 @@ impl FromStr for Calendar {
     type Err = CalendarError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let (join, sep) = if s.contains('|') { (JoinRule::BusinessDays, '|') } else { (JoinRule::Holidays, '+') };
-        let markets = s
-            .split([sep, ','])
-            .filter(|p| !p.trim().is_empty())
-            .map(str::parse)
-            .collect::<Result<Vec<Market>, _>>()?;
+        let markets = s.split([sep, ',']).filter(|p| !p.trim().is_empty()).map(str::parse).collect::<Result<Vec<Market>, _>>()?;
         if markets.is_empty() {
             return Err(CalendarError::UnknownCalendar(s.to_owned()));
         }
@@ -316,10 +318,7 @@ fn is_veterans(y: i32, m: u32, dd: u32, w: Weekday, saturday_to_friday: bool) ->
     if (1971..=1977).contains(&y) {
         return m == 10 && w == Weekday::Monday && (22..=28).contains(&dd);
     }
-    m == 11
-        && (dd == 11
-            || (dd == 12 && w == Weekday::Monday)
-            || (saturday_to_friday && dd == 10 && w == Weekday::Friday))
+    m == 11 && (dd == 11 || (dd == 12 && w == Weekday::Monday) || (saturday_to_friday && dd == 10 && w == Weekday::Friday))
 }
 
 fn is_thanksgiving(m: u32, dd: u32, w: Weekday) -> bool {
@@ -391,9 +390,18 @@ mod tests {
     fn sifma_2026() {
         let cal = Calendar::new(Market::UsGovernmentBond);
         let expected = vec![
-            d(2026, 1, 1), d(2026, 1, 19), d(2026, 2, 16), d(2026, 4, 3),
-            d(2026, 5, 25), d(2026, 6, 19), d(2026, 7, 3), d(2026, 9, 7),
-            d(2026, 10, 12), d(2026, 11, 11), d(2026, 11, 26), d(2026, 12, 25),
+            d(2026, 1, 1),
+            d(2026, 1, 19),
+            d(2026, 2, 16),
+            d(2026, 4, 3),
+            d(2026, 5, 25),
+            d(2026, 6, 19),
+            d(2026, 7, 3),
+            d(2026, 9, 7),
+            d(2026, 10, 12),
+            d(2026, 11, 11),
+            d(2026, 11, 26),
+            d(2026, 12, 25),
         ];
         assert_eq!(cal.holidays(d(2026, 1, 1), d(2026, 12, 31)), expected);
     }
