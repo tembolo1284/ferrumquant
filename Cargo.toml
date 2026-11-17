@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/fq-core",   # time, math, market snapshot
     "crates/fq-rates",  # indices, curves, bonds, futures, swaps, swaptions
+    "crates/fq-commod-core", # contract months, futures curves, basis, seasonal vol, Asian/spread options, Clewlow-Strickland MC
     "crates/fq-fx",     # currencies, FX forwards/NDFs, vanilla options, vol surfaces
     "crates/fq-py",     # PyO3 bindings -> python module `ferrumquant`
     # "crates/fq-capi", # flat C ABI for Excel/XLL (added later)

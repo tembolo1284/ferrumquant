@@ -1,0 +1,19 @@
+[package]
+name = "fq-commod-core"
+description = "Shared commodity primitives for ferrumquant: contract months, futures curves, basis, seasonal vol, Black-76 and Asian options on futures, spread options, and a Clewlow-Strickland forward-curve model."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+fq-core.workspace = true
+fq-rates.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+approx.workspace = true
+
+[lints]
+workspace = true

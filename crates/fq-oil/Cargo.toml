@@ -1,0 +1,20 @@
+[package]
+name = "fq-oil"
+description = "Crude oil and refined products for ferrumquant: contract specs and expiry rules, front-month rolls, monthly-average swaps and APOs, crack spreads and options, calendar spread options and contango carry."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+fq-core.workspace = true
+fq-rates.workspace = true
+fq-commod-core.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+approx.workspace = true
+
+[lints]
+workspace = true
