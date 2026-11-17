@@ -10,7 +10,7 @@ cd "$(dirname "$0")"
 # "labelled" by where they live (e.g. fq-rates/src/swap/... -> "swap::").
 # Add new products here as their modules land.
 # ---------------------------------------------------------------------------
-PRODUCTS_ALL="date daycount calendar markets schedule period imm time solver black interp sabr core bond spread future delivery deposit sofr-future curve jacobian index swap swaption volcube capfloor golden rates currency fx-forward fx-vanilla fx-vol fx commod-contract commod-curve commod-vol commod-option commod-asian commod-spread commod-model commod gas-hub gas-swap gas-transport gas-storage gas-swing gas power-iso power-hub power-curve power-swap power-heatrate power-shape power-dispatch power oil-contract oil-swap oil-apo oil-crack oil-cso oil metals-metal metals-precious metals-lme metals-lme-curve metals ags-contract ags-option ags-crush ags-spread ags"
+PRODUCTS_ALL="date daycount calendar markets schedule period imm time solver black interp sabr core bond spread future delivery deposit sofr-future curve jacobian index swap swaption volcube capfloor golden rates currency fx-forward fx-vanilla fx-vol fx commod-contract commod-curve commod-vol commod-option commod-asian commod-spread commod-model commod gas-hub gas-swap gas-transport gas-storage gas-swing gas power-iso power-hub power-curve power-swap power-heatrate power-shape power-dispatch power oil-contract oil-swap oil-apo oil-crack oil-cso oil metals-metal metals-precious metals-lme metals-lme-curve metals ags-contract ags-option ags-crush ags-spread ags models-hw models-swaption models-tree models-calib models-sim models optim rng"
 
 product_target() {
     case "$1" in
@@ -26,6 +26,8 @@ product_target() {
         black)      echo "fq-core math::black::" ;;
         interp)     echo "fq-core math::interpolation::" ;;
         sabr)       echo "fq-core math::sabr::" ;;
+        optim)      echo "fq-core math::optim::" ;;
+        rng)        echo "fq-core math::rng::" ;;
         core)       echo "fq-core -" ;;
         bond)       echo "fq-rates bond::" ;;
         spread)     echo "fq-rates bond::spread::" ;;
@@ -85,6 +87,12 @@ product_target() {
         ags-crush)       echo "fq-ags crush::" ;;
         ags-spread)      echo "fq-ags spread::" ;;
         ags)             echo "fq-ags -" ;;
+        models-hw)       echo "fq-models hull_white::" ;;
+        models-swaption) echo "fq-models swaption::" ;;
+        models-tree)     echo "fq-models tree::" ;;
+        models-calib)    echo "fq-models calibration::" ;;
+        models-sim)      echo "fq-models simulation::" ;;
+        models)          echo "fq-models -" ;;
         *)          return 1 ;;
     esac
 }

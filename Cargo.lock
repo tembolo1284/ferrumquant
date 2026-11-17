@@ -86,6 +86,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "fq-models"
+version = "0.1.0"
+dependencies = [
+ "approx",
+ "fq-core",
+ "fq-rates",
+ "thiserror",
+]
+
+[[package]]
 name = "fq-oil"
 version = "0.1.0"
 dependencies = [

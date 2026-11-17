@@ -10,12 +10,13 @@ members = [
     "crates/fq-oil",    # oil contract specs and expiries, front-month rolls, average swaps, APOs, cracks, CSOs, contango carry
     "crates/fq-metals", # precious metals as currencies (forwards, GOFO, vanillas), LME prompt rules, curves, carries, forwards, options
     "crates/fq-ags",    # grains, oilseeds, softs, livestock: listed months, expiry rules, crush, futures options, calendar spreads
+    "crates/fq-models", # term-structure models: Hull-White 1F analytics, calibration, trinomial tree, simulation
     "crates/fq-py",     # PyO3 bindings -> python module `ferrumquant`
     # "crates/fq-capi", # flat C ABI for Excel/XLL (added later)
 ]
 # Plain `cargo build`/`cargo test` skip the Python bindings; `--workspace`
 # (or `maturin develop` in crates/fq-py) still builds them.
-default-members = ["crates/fq-core", "crates/fq-rates", "crates/fq-fx", "crates/fq-commod-core", "crates/fq-gas", "crates/fq-power", "crates/fq-oil", "crates/fq-metals", "crates/fq-ags"]
+default-members = ["crates/fq-core", "crates/fq-rates", "crates/fq-fx", "crates/fq-commod-core", "crates/fq-gas", "crates/fq-power", "crates/fq-oil", "crates/fq-metals", "crates/fq-ags", "crates/fq-models"]
 
 [workspace.package]
 version = "0.1.0"
@@ -35,6 +36,7 @@ fq-power = { path = "crates/fq-power" }
 fq-oil = { path = "crates/fq-oil" }
 fq-metals = { path = "crates/fq-metals" }
 fq-ags = { path = "crates/fq-ags" }
+fq-models = { path = "crates/fq-models" }
 num-traits = "0.2"
 thiserror = "2"
 approx = "0.5"
