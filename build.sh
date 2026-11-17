@@ -99,7 +99,7 @@ product_target() {
 
 # Python-side products: name -> pytest file under python/tests.
 # `-p py-NAME` with `--py test` runs just that file; `-t` adds a -k filter.
-PY_PRODUCTS_ALL="py-bond py-curve py-swap py-future py-vol py-fx py-commod"
+PY_PRODUCTS_ALL="py-bond py-curve py-swap py-future py-vol py-models py-fx py-commod"
 
 py_product_target() {
     case "$1" in
@@ -108,6 +108,7 @@ py_product_target() {
         py-swap)     echo "test_swaps.py" ;;
         py-future)   echo "test_futures.py" ;;
         py-vol)      echo "test_vol.py" ;;
+        py-models)   echo "test_models.py" ;;
         py-fx)       echo "test_fx.py" ;;
         py-commod)   echo "test_commod.py" ;;
         *)           return 1 ;;
@@ -144,7 +145,8 @@ Python (crates/fq-py bindings + python/fqview tool):
                          build  compile the ferrumquant module into the venv
                          test   run python/tests (honours -p py-* and -t)
                          view   print the sample blotter (args after --;
-                                "-- commod [DATE] [PATHS]" prints the commodities book)
+                                "-- models [DATE]" prints the Hull-White view,
+                                "-- commod [DATE] [PATHS]" the commodities book)
                          shell  open a shell with the venv activated
                          all    setup + build + test + view
                        build/test/view set up the venv first if it is missing.

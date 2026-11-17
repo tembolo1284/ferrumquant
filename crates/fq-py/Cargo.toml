@@ -24,6 +24,7 @@ fq-power = { workspace = true }
 fq-oil = { workspace = true }
 fq-metals = { workspace = true }
 fq-ags = { workspace = true }
+fq-models = { workspace = true }
 pyo3 = { version = "0.23", features = ["extension-module", "abi3-py39"] }
 
 [lints]

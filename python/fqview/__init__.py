@@ -7,6 +7,7 @@ outputs the way a desk would look at them.
     python -m fqview            # every sample view
     python -m fqview bonds      # Treasury blotter
     python -m fqview rates      # SOFR curve, swap/swaption book, vol cube, futures basis
+    python -m fqview models     # Hull-White fit to the cube, Bermudans, simulated paths
     python -m fqview fx         # FX forwards, smiles and option book
     python -m fqview commod     # commodities book
 """
@@ -16,6 +17,7 @@ from .curves import CurveView, sample_quotes
 from .swaps import RatesBlotter, SwapPosition, SwaptionPosition, sample_rates_book
 from .futures import BasisScreen, Deliverable, sample_basket
 from .vol import CapPosition, VolView, sample_caps, sample_cube_quotes
+from .models import BermudanPosition, ModelView, sample_bermudans
 from .fx import FxOptionPosition, FxView, sample_fx_book, sample_fx_market, sample_fx_quotes
 from .commod import (
     CommodBook,
@@ -62,6 +64,10 @@ __all__ = [
     "CapPosition",
     "sample_cube_quotes",
     "sample_caps",
+    # models
+    "ModelView",
+    "BermudanPosition",
+    "sample_bermudans",
     # fx
     "FxView",
     "FxOptionPosition",
