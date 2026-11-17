@@ -10,7 +10,7 @@ cd "$(dirname "$0")"
 # "labelled" by where they live (e.g. fq-rates/src/swap/... -> "swap::").
 # Add new products here as their modules land.
 # ---------------------------------------------------------------------------
-PRODUCTS_ALL="date daycount calendar markets schedule period imm time solver black interp sabr core bond spread future delivery deposit sofr-future curve jacobian index swap swaption volcube capfloor golden rates currency fx-forward fx-vanilla fx-vol fx"
+PRODUCTS_ALL="date daycount calendar markets schedule period imm time solver black interp sabr core bond spread future delivery deposit sofr-future curve jacobian index swap swaption volcube capfloor golden rates currency fx-forward fx-vanilla fx-vol fx commod-contract commod-curve commod-vol commod-option commod-asian commod-spread commod-model commod gas-hub gas-swap gas-transport gas-storage gas-swing gas power-iso power-hub power-curve power-swap power-heatrate power-shape power-dispatch power oil-contract oil-swap oil-apo oil-crack oil-cso oil metals-metal metals-precious metals-lme metals-lme-curve metals ags-contract ags-option ags-crush ags-spread ags"
 
 product_target() {
     case "$1" in
@@ -47,13 +47,51 @@ product_target() {
         fx-vanilla) echo "fq-fx vanilla::" ;;
         fx-vol)     echo "fq-fx vol_surface::" ;;
         fx)         echo "fq-fx -" ;;
+        commod-contract) echo "fq-commod-core contract::" ;;
+        commod-curve)    echo "fq-commod-core curve::" ;;
+        commod-vol)      echo "fq-commod-core vol::" ;;
+        commod-option)   echo "fq-commod-core option::" ;;
+        commod-asian)    echo "fq-commod-core asian::" ;;
+        commod-spread)   echo "fq-commod-core spread::" ;;
+        commod-model)    echo "fq-commod-core model::" ;;
+        commod)          echo "fq-commod-core -" ;;
+        gas-hub)         echo "fq-gas hub::" ;;
+        gas-swap)        echo "fq-gas swap::" ;;
+        gas-transport)   echo "fq-gas transport::" ;;
+        gas-storage)     echo "fq-gas storage::" ;;
+        gas-swing)       echo "fq-gas swing::" ;;
+        gas)             echo "fq-gas -" ;;
+        power-iso)       echo "fq-power iso::" ;;
+        power-hub)       echo "fq-power hub::" ;;
+        power-curve)     echo "fq-power curve::" ;;
+        power-swap)      echo "fq-power swap::" ;;
+        power-heatrate)  echo "fq-power heat_rate::" ;;
+        power-shape)     echo "fq-power shape::" ;;
+        power-dispatch)  echo "fq-power dispatch::" ;;
+        power)           echo "fq-power -" ;;
+        oil-contract)    echo "fq-oil contract::" ;;
+        oil-swap)        echo "fq-oil swap::" ;;
+        oil-apo)         echo "fq-oil apo::" ;;
+        oil-crack)       echo "fq-oil crack::" ;;
+        oil-cso)         echo "fq-oil calendar_spread::" ;;
+        oil)             echo "fq-oil -" ;;
+        metals-metal)    echo "fq-metals metal::" ;;
+        metals-precious) echo "fq-metals precious::" ;;
+        metals-lme)      echo "fq-metals lme::" ;;
+        metals-lme-curve) echo "fq-metals lme_curve::" ;;
+        metals)          echo "fq-metals -" ;;
+        ags-contract)    echo "fq-ags contract::" ;;
+        ags-option)      echo "fq-ags option::" ;;
+        ags-crush)       echo "fq-ags crush::" ;;
+        ags-spread)      echo "fq-ags spread::" ;;
+        ags)             echo "fq-ags -" ;;
         *)          return 1 ;;
     esac
 }
 
 # Python-side products: name -> pytest file under python/tests.
 # `-p py-NAME` with `--py test` runs just that file; `-t` adds a -k filter.
-PY_PRODUCTS_ALL="py-bond py-curve py-swap py-future py-vol"
+PY_PRODUCTS_ALL="py-bond py-curve py-swap py-future py-vol py-commod"
 
 py_product_target() {
     case "$1" in
@@ -62,6 +100,7 @@ py_product_target() {
         py-swap)     echo "test_swaps.py" ;;
         py-future)   echo "test_futures.py" ;;
         py-vol)      echo "test_vol.py" ;;
+        py-commod)   echo "test_commod.py" ;;
         *)           return 1 ;;
     esac
 }
@@ -95,7 +134,8 @@ Python (crates/fq-py bindings + python/fqview tool):
                          setup  create the venv and install maturin/pytest
                          build  compile the ferrumquant module into the venv
                          test   run python/tests (honours -p py-* and -t)
-                         view   print the sample blotter (args after --)
+                         view   print the sample blotter (args after --;
+                                "-- commod [DATE] [PATHS]" prints the commodities book)
                          shell  open a shell with the venv activated
                          all    setup + build + test + view
                        build/test/view set up the venv first if it is missing.
@@ -122,6 +162,7 @@ Examples:
   ./build.sh --py build -r             # optimized module into the venv
   ./build.sh --py test -p py-bond -t sweep
   ./build.sh --py view -- 2026-10-16
+  ./build.sh --py view -- commod 2026-11-09 2000
 EOF
 }
 

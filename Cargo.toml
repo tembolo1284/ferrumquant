@@ -3,14 +3,19 @@ resolver = "2"
 members = [
     "crates/fq-core",   # time, math, market snapshot
     "crates/fq-rates",  # indices, curves, bonds, futures, swaps, swaptions
-    "crates/fq-commod-core", # contract months, futures curves, basis, seasonal vol, Asian/spread options, Clewlow-Strickland MC
     "crates/fq-fx",     # currencies, FX forwards/NDFs, vanilla options, vol surfaces
+    "crates/fq-commod-core", # contract months, futures curves, basis, seasonal vol, Asian/spread options, Clewlow-Strickland MC
+    "crates/fq-gas",    # gas hubs, NYMEX conventions, index/basis swaps, transport, storage, swing
+    "crates/fq-power",  # ISO calendars and blocks, power hubs/curves, block swaps, heat-rate options, tolling, shaping, dispatch DP
+    "crates/fq-oil",    # oil contract specs and expiries, front-month rolls, average swaps, APOs, cracks, CSOs, contango carry
+    "crates/fq-metals", # precious metals as currencies (forwards, GOFO, vanillas), LME prompt rules, curves, carries, forwards, options
+    "crates/fq-ags",    # grains, oilseeds, softs, livestock: listed months, expiry rules, crush, futures options, calendar spreads
     "crates/fq-py",     # PyO3 bindings -> python module `ferrumquant`
     # "crates/fq-capi", # flat C ABI for Excel/XLL (added later)
 ]
 # Plain `cargo build`/`cargo test` skip the Python bindings; `--workspace`
 # (or `maturin develop` in crates/fq-py) still builds them.
-default-members = ["crates/fq-core", "crates/fq-rates", "crates/fq-fx"]
+default-members = ["crates/fq-core", "crates/fq-rates", "crates/fq-fx", "crates/fq-commod-core", "crates/fq-gas", "crates/fq-power", "crates/fq-oil", "crates/fq-metals", "crates/fq-ags"]
 
 [workspace.package]
 version = "0.1.0"
@@ -24,6 +29,12 @@ description = "QuantLib-inspired Rust library for pricing and risk across rates,
 fq-core = { path = "crates/fq-core" }
 fq-rates = { path = "crates/fq-rates" }
 fq-fx = { path = "crates/fq-fx" }
+fq-commod-core = { path = "crates/fq-commod-core" }
+fq-gas = { path = "crates/fq-gas" }
+fq-power = { path = "crates/fq-power" }
+fq-oil = { path = "crates/fq-oil" }
+fq-metals = { path = "crates/fq-metals" }
+fq-ags = { path = "crates/fq-ags" }
 num-traits = "0.2"
 thiserror = "2"
 approx = "0.5"
