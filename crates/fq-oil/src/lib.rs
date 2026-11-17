@@ -24,7 +24,7 @@ pub mod crack;
 pub mod error;
 pub mod swap;
 
-pub use apo::{AveragePriceOption, ApoValuation};
+pub use apo::{ApoValuation, AveragePriceOption};
 pub use calendar_spread::{CalendarSpreadOption, CalendarSpreadValuation, CarryResult, contango_carry};
 pub use contract::{Exchange, OilContract, OilMarket, expiry, front_month, pricing_days};
 pub use crack::{Crack321, Crack321Valuation, CrackOption, CrackOptionValuation, CrackSpread, basket_lognormal};

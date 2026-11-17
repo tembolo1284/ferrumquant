@@ -249,7 +249,9 @@ impl SpreadOption {
         let df = discount.discount(self.expiry)?;
         let scale = self.quantity * df;
 
-        let price_at = |f1: f64, f2: f64, r: f64| spread_price(self.method, self.kind, self.long_weight * f1, self.short_weight * f2, long_vol, short_vol, r, t, self.strike);
+        let price_at = |f1: f64, f2: f64, r: f64| {
+            spread_price(self.method, self.kind, self.long_weight * f1, self.short_weight * f2, long_vol, short_vol, r, t, self.strike)
+        };
         let forward_price = price_at(f1_raw, f2_raw, rho)?;
 
         let h1 = 1e-4 * f1_raw;
@@ -361,8 +363,10 @@ mod tests {
         let val = ymd(2026, 11, 9);
         let pjm = Hub::new("PJMW", Commodity::Power, Unit::MWh);
         let tetco = Hub::new("TETM3", Commodity::NaturalGas, Unit::MmBtu);
-        let power = FuturesCurve::new(pjm, val, vec![FuturesQuote::new(cm(2027, 1), 95.0), FuturesQuote::new(cm(2027, 7), 55.0)], CurveInterpolation::Linear).expect("pw");
-        let gas = FuturesCurve::new(tetco, val, vec![FuturesQuote::new(cm(2027, 1), 8.0), FuturesQuote::new(cm(2027, 7), 3.0)], CurveInterpolation::Linear).expect("gas");
+        let power = FuturesCurve::new(pjm, val, vec![FuturesQuote::new(cm(2027, 1), 95.0), FuturesQuote::new(cm(2027, 7), 55.0)], CurveInterpolation::Linear)
+            .expect("pw");
+        let gas = FuturesCurve::new(tetco, val, vec![FuturesQuote::new(cm(2027, 1), 8.0), FuturesQuote::new(cm(2027, 7), 3.0)], CurveInterpolation::Linear)
+            .expect("gas");
         let nodes: Vec<(Date, f64)> = (1..=12).map(|k| (val.add_months(k).expect("d"), (-0.045 * k as f64 / 12.0).exp())).collect();
         let disc = DiscountCurve::new(val, &nodes, Interpolation::LogLinearDiscount).expect("disc");
         // Jan-27 7.5 HR spark, $3 VOM, on 16 hours x 21 days x 50 MW.
