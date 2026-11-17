@@ -1,0 +1,20 @@
+[package]
+name = "fq-metals"
+description = "Metals for ferrumquant: precious metals as currencies (spot, lease and USD curves, forwards, GOFO, vanillas) and LME base metals (prompt-date rules, prompt-keyed curves, carries, forwards and third-Wednesday options)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+fq-core.workspace = true
+fq-rates.workspace = true
+fq-commod-core.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+approx.workspace = true
+
+[lints]
+workspace = true
