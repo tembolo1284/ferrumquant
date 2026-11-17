@@ -384,7 +384,14 @@ impl PyFxForward {
     }
 
     fn __repr__(&self) -> String {
-        format!("FxForward({} {} {} @ {} value {})", direction_name(self.0.direction()), self.0.notional_base(), self.0.pair(), self.0.strike(), self.0.value_date())
+        format!(
+            "FxForward({} {} {} @ {} value {})",
+            direction_name(self.0.direction()),
+            self.0.notional_base(),
+            self.0.pair(),
+            self.0.strike(),
+            self.0.value_date()
+        )
     }
 }
 
@@ -565,7 +572,15 @@ impl PyFxVanilla {
     /// Market-tenor option: delivery on the forward date, expiry `spot_lag` business days before.
     #[staticmethod]
     #[pyo3(signature = (pair, trade_date, tenor, kind, strike, notional_base, premium = None))]
-    fn from_tenor(pair: PairLike, trade_date: DateLike, tenor: PeriodLike, kind: &str, strike: f64, notional_base: f64, premium: Option<&str>) -> PyResult<Self> {
+    fn from_tenor(
+        pair: PairLike,
+        trade_date: DateLike,
+        tenor: PeriodLike,
+        kind: &str,
+        strike: f64,
+        notional_base: f64,
+        premium: Option<&str>,
+    ) -> PyResult<Self> {
         let mut v = FxVanilla::from_tenor(pair.0, trade_date.0, tenor.0, parse_kind(kind)?, strike, notional_base).map_err(err)?;
         if let Some(p) = premium {
             v = v.with_premium_currency(parse_premium(p)?);
@@ -667,9 +682,8 @@ impl<'py> FromPyObject<'py> for SmileQuoteLike {
         if let Ok((t, atm, rr25, bf25, rr10, bf10)) = obj.extract::<(PeriodLike, f64, f64, f64, f64, f64)>() {
             return Ok(Self(SmileQuote::new(t.0, atm, rr25, bf25).with_10d(rr10, bf10)));
         }
-        let (t, atm, rr25, bf25): (PeriodLike, f64, f64, f64) = obj
-            .extract()
-            .map_err(|_| FerrumError::new_err("smile quote must be (tenor, atm, rr25, bf25[, rr10, bf10]) or a dict with those keys"))?;
+        let (t, atm, rr25, bf25): (PeriodLike, f64, f64, f64) =
+            obj.extract().map_err(|_| FerrumError::new_err("smile quote must be (tenor, atm, rr25, bf25[, rr10, bf10]) or a dict with those keys"))?;
         Ok(Self(SmileQuote::new(t.0, atm, rr25, bf25)))
     }
 }

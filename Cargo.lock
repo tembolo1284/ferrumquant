@@ -114,6 +114,7 @@ dependencies = [
  "fq-ags",
  "fq-commod-core",
  "fq-core",
+ "fq-fx",
  "fq-gas",
  "fq-metals",
  "fq-oil",

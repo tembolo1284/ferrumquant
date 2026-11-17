@@ -190,7 +190,7 @@ impl ClewlowStrickland {
             return Err(CommodError::Invalid("times must be increasing and start after 0".into()));
         }
         for &(t, f) in initial {
-            if !(t.is_finite() && t > 0.0) || !(f.is_finite() && f > 0.0) {
+            if !(t.is_finite() && t > 0.0 && f.is_finite() && f > 0.0) {
                 return Err(CommodError::Invalid(format!("bad contract (T={t}, F={f})")));
             }
         }
