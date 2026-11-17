@@ -17,6 +17,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 fq-core = { workspace = true }
 fq-rates = { workspace = true }
+fq-fx = { workspace = true }
 fq-commod-core = { workspace = true }
 fq-gas = { workspace = true }
 fq-power = { workspace = true }

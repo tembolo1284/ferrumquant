@@ -8,7 +8,8 @@
 //! Modules: `time` (Date, Period), `bond` (FixedRateBond), `curve`
 //! (DiscountCurve, OvernightIndex, bootstrap, Jacobian), `swap` (OisSwap,
 //! Swaption), `future` (TreasuryFuture, SofrFuture), `vol` (SwaptionVolCube,
-//! CapFloor), and the commodities stack: `commod` (ContractMonth, Hub,
+//! CapFloor), `fx` (CurrencyPair, FxMarket, FxForward, FxNdf, FxVanilla,
+//! FxVolSurface), and the commodities stack: `commod` (ContractMonth, Hub,
 //! FuturesCurve, BasisCurve, SeasonalVol, FuturesOption, AsianOption,
 //! SpreadOption, ClewlowStrickland), `gas`, `power`, `oil`, `metals`, `ags`.
 //!
@@ -27,6 +28,7 @@ mod bond;
 mod commod;
 mod curve;
 mod future;
+mod fx;
 mod gas;
 mod metals;
 mod oil;
@@ -38,6 +40,7 @@ mod vol;
 pub use bond::{PyBondSpreads, PyFixedRateBond, PyYieldAnalytics};
 pub use curve::{PyBootstrapResult, PyCurveJacobian, PyDiscountCurve, PyOvernightIndex};
 pub use future::{PyDeliveryOption, PySofrFuture, PyTreasuryFuture};
+pub use fx::{PyCurrencyPair, PyFxForward, PyFxMarket, PyFxNdf, PyFxSlice, PyFxVanilla, PyFxVolSurface};
 pub use swap::{PyOisSwap, PySwapValuation, PySwaption, PySwaptionPricing};
 pub use time::{DateLike, PeriodLike, PyDate, PyPeriod};
 pub use vol::{PyCapFloor, PyCapFloorPricing, PySwaptionVolCube};
@@ -69,6 +72,7 @@ fn ferrumquant(m: &Bound<'_, PyModule>) -> PyResult<()> {
     swap::register(m)?;
     future::register(m)?;
     vol::register(m)?;
+    fx::register(m)?;
     commod::register(m)?;
     gas::register(m)?;
     power::register(m)?;

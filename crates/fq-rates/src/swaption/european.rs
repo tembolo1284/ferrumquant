@@ -25,6 +25,8 @@ pub enum SwaptionError {
     Expired { expiry: Date, today: Date },
     #[error("underlying swap starts {start}, before expiry {expiry}")]
     UnderlyingStartsBeforeExpiry { start: Date, expiry: Date },
+    #[error("a {kind:?} swaption needs a {expected:?} underlying, got {got:?}")]
+    SideMismatch { kind: SwaptionType, expected: SwapSide, got: SwapSide },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -94,6 +96,9 @@ impl Swaption {
         let start = underlying.effective_date();
         if start < expiry {
             return Err(SwaptionError::UnderlyingStartsBeforeExpiry { start, expiry });
+        }
+        if underlying.side() != kind.swap_side() {
+            return Err(SwaptionError::SideMismatch { kind, expected: kind.swap_side(), got: underlying.side() });
         }
         Ok(Self { expiry, kind, underlying })
     }
@@ -256,6 +261,9 @@ mod tests {
         assert!(matches!(s.price(&index, &curve, &curve, VolQuote::Normal(0.01)), Err(SwaptionError::Expired { .. })));
         let swap = OisSwap::usd_sofr_spot(today, Tenor::years(5), SwapSide::PayFixed, 1e6, 0.04)?;
         assert!(matches!(Swaption::new(d(2027, 1, 4), SwaptionType::Payer, swap), Err(SwaptionError::UnderlyingStartsBeforeExpiry { .. })));
+        // A receiver swaption needs a receive-fixed underlying.
+        let payer_swap = OisSwap::usd_sofr_spot(d(2027, 10, 13), Tenor::years(5), SwapSide::PayFixed, 1e6, 0.04)?;
+        assert!(matches!(Swaption::new(d(2027, 10, 13), SwaptionType::Receiver, payer_swap), Err(SwaptionError::SideMismatch { .. })));
         Ok(())
     }
 }

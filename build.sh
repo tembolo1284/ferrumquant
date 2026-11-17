@@ -91,7 +91,7 @@ product_target() {
 
 # Python-side products: name -> pytest file under python/tests.
 # `-p py-NAME` with `--py test` runs just that file; `-t` adds a -k filter.
-PY_PRODUCTS_ALL="py-bond py-curve py-swap py-future py-vol py-commod"
+PY_PRODUCTS_ALL="py-bond py-curve py-swap py-future py-vol py-fx py-commod"
 
 py_product_target() {
     case "$1" in
@@ -100,6 +100,7 @@ py_product_target() {
         py-swap)     echo "test_swaps.py" ;;
         py-future)   echo "test_futures.py" ;;
         py-vol)      echo "test_vol.py" ;;
+        py-fx)       echo "test_fx.py" ;;
         py-commod)   echo "test_commod.py" ;;
         *)           return 1 ;;
     esac

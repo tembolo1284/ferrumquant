@@ -1,14 +1,36 @@
-"""``python -m fqview [TRADE_DATE]`` prints the sample Treasury blotter;
-``python -m fqview commod [TRADE_DATE] [MC_PATHS]`` prints the sample
-commodities book."""
+"""``python -m fqview [GROUP] [TRADE_DATE] [MC_PATHS]`` prints sample views.
+
+GROUP is ``bonds`` (Treasury blotter), ``rates`` (SOFR curve, swap and
+swaption book, vol cube and caps, Treasury futures basis), ``fx`` (forwards,
+smiles, option book), ``commod`` (commodities book; MC_PATHS applies), or
+``all`` (default: everything in that order)."""
 
 import sys
 
-from . import bonds, commod
+from . import bonds, commod, curves, futures, fx, swaps, vol
+
+GROUPS = {
+    "bonds": [bonds],
+    "treasury": [bonds],
+    "rates": [curves, swaps, vol, futures],
+    "curve": [curves],
+    "swaps": [swaps],
+    "vol": [vol],
+    "futures": [futures],
+    "fx": [fx],
+    "currencies": [fx],
+    "commod": [commod],
+    "commodities": [commod],
+    "energy": [commod],
+}
 
 args = sys.argv[1:]
-if args and args[0] in ("commod", "commodities", "energy"):
-    sys.exit(commod.main([sys.argv[0], *args[1:]]))
-if args and args[0] in ("bonds", "treasury"):
-    args = args[1:]
-sys.exit(bonds.main([sys.argv[0], *args]))
+group = "all"
+if args and args[0].lower() in GROUPS or (args and args[0].lower() == "all"):
+    group, args = args[0].lower(), args[1:]
+modules = [curves, swaps, vol, futures, fx, bonds, commod] if group == "all" else GROUPS[group]
+for mod in modules:
+    rc = mod.main([sys.argv[0], *args])
+    if rc:
+        sys.exit(rc)
+    print()
