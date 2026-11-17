@@ -24,6 +24,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4e7648175b45a9a48536d676f68d918270699102aa8dab5496df06904c914600"
 
 [[package]]
+name = "fq-ags"
+version = "0.1.0"
+dependencies = [
+ "approx",
+ "fq-commod-core",
+ "fq-core",
+ "fq-rates",
+ "thiserror",
+]
+
+[[package]]
+name = "fq-commod-core"
+version = "0.1.0"
+dependencies = [
+ "approx",
+ "fq-core",
+ "fq-rates",
+ "thiserror",
+]
+
+[[package]]
 name = "fq-core"
 version = "0.1.0"
 dependencies = [
@@ -43,10 +64,60 @@ dependencies = [
 ]
 
 [[package]]
+name = "fq-gas"
+version = "0.1.0"
+dependencies = [
+ "approx",
+ "fq-commod-core",
+ "fq-core",
+ "fq-rates",
+ "thiserror",
+]
+
+[[package]]
+name = "fq-metals"
+version = "0.1.0"
+dependencies = [
+ "approx",
+ "fq-commod-core",
+ "fq-core",
+ "fq-rates",
+ "thiserror",
+]
+
+[[package]]
+name = "fq-oil"
+version = "0.1.0"
+dependencies = [
+ "approx",
+ "fq-commod-core",
+ "fq-core",
+ "fq-rates",
+ "thiserror",
+]
+
+[[package]]
+name = "fq-power"
+version = "0.1.0"
+dependencies = [
+ "approx",
+ "fq-commod-core",
+ "fq-core",
+ "fq-rates",
+ "thiserror",
+]
+
+[[package]]
 name = "fq-py"
 version = "0.1.0"
 dependencies = [
+ "fq-ags",
+ "fq-commod-core",
  "fq-core",
+ "fq-gas",
+ "fq-metals",
+ "fq-oil",
+ "fq-power",
  "fq-rates",
  "pyo3",
 ]

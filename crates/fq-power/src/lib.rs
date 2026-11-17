@@ -36,7 +36,7 @@ pub use error::PowerError;
 pub use heat_rate::{HeatRateMonth, HeatRateOption, HeatRateValuation, TollingAgreement, TollingValuation};
 pub use hub::PowerHub;
 pub use iso::{Block, Iso, block_hours, hours_in_day, is_nerc_holiday, is_peak_day, is_peak_hour};
-pub use shape::{HourlyProfile, HourlyPrices, shape_month};
+pub use shape::{HourlyPrices, HourlyProfile, shape_month};
 pub use swap::{BlockSwap, BlockSwapValuation};
 
 #[cfg(test)]
