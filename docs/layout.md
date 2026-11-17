@@ -18,6 +18,7 @@ ferrumquant/
 │   ├── fq-oil/                oil and refined products
 │   ├── fq-metals/             precious and LME base metals
 │   ├── fq-ags/                agriculturals
+│   ├── fq-models/             term-structure models (Hull-White 1F)
 │   └── fq-py/                 PyO3 bindings -> python module `ferrumquant`
 └── python/
     ├── pytest.ini
@@ -41,6 +42,8 @@ crates/fq-core/src
     ├── solver.rs        Brent, safeguarded Newton
     ├── black.rs         normal CDF/inverse, Bachelier, shifted Black, Black-76 with Greeks
     ├── sabr.rs          Hagan SABR implied vol and calibration
+    ├── optim.rs         Nelder-Mead simplex minimiser in any dimension
+    ├── rng.rs           xoshiro256** with splitmix64 seeding, Marsaglia polar Gaussians
     └── interpolation.rs 1D/2D interpolators with flat extrapolation
  
 crates/fq-rates/src
@@ -70,6 +73,19 @@ crates/fq-fx/src
 ├── forward.rs      FxMarket (spot + two curves), FxForward, FxNdf
 ├── vanilla.rs      FxVanilla under Garman-Kohlhagen, delta and ATM conventions, premium currency
 └── vol_surface.rs  FxSmile and FxVolSurface from ATM/RR/BF quotes, expiry and delivery rules
+```
+ 
+## Models
+ 
+```
+crates/fq-models/src
+├── hull_white.rs   HullWhite on a DiscountCurve: B, variance, bonds P(t,T|x) via the zero-mean factor,
+│                   ZCB options (Jamshidian), caplets on compounded (in-arrears) and term rates
+├── swaption.rs     European swaptions in closed form on the swap's actual dates, BermudanSwaption
+│                   (co-terminal builder), exercise boundary, implied normal vol
+├── tree.rs         TrinomialTree: non-uniform steps, Arrow-Debreu fit to the curve, rollback with exercise
+├── calibration.rs  calibrate() to swaption normal vols, sigma only or (a, sigma), vega-weighted price errors
+└── simulation.rs   exact joint simulation of (x, int x), ShortRatePaths with discount factors and bonds
 ```
  
 ## Commodities
@@ -123,7 +139,7 @@ crates/fq-ags/src
 Each crate also has `lib.rs` (re-exports and a Send + Sync assertion) and
 `error.rs` (a `thiserror` enum). The sector crates depend only on
 `fq-commod-core`, `fq-core` and `fq-rates` (for `DiscountCurve`), never on
-each other.
+each other; `fq-models` depends on `fq-core` and `fq-rates`.
  
 ## Python
  
@@ -139,6 +155,8 @@ crates/fq-py
     ├── future.rs     TreasuryFuture, DeliveryOption, SofrFuture
     ├── swap.rs       OisSwap, Swaption
     ├── vol.rs        SwaptionVolCube, CapFloor
+    ├── models.rs     HullWhite (bonds, ZCB options, caplets, european_swaption, bermudan_swaption, simulate),
+    │                 BermudanSwaption, ShortRatePaths, HwSwaptionPricing, HwCalibration, calibrate_hull_white
     ├── fx.rs         CurrencyPair (dates, conventions), FxMarket, FxForward, FxNdf, FxSlice (delta <-> strike,
     │                 ATM strikes), FxVanilla (Garman-Kohlhagen, Greeks in market conventions), FxVolSurface
     ├── commod.rs     ContractMonth (MonthLike: "F27", "2027-01", (2027, 1), a date), Hub, FuturesCurve,
@@ -160,12 +178,13 @@ python
 ├── pytest.ini
 ├── fqview/
 │   ├── __init__.py   exports
-│   ├── __main__.py   `python -m fqview [GROUP] [DATE] [PATHS]`; GROUP = all | bonds | rates | fx | commod
+│   ├── __main__.py   `python -m fqview [GROUP] [DATE] [PATHS]`; GROUP = all | bonds | rates | models | fx | commod
 │   ├── bonds.py      TreasuryBlotter, TreasuryPosition, sample_book
 │   ├── curves.py     CurveView: bootstrap with Jacobian, node table, par-quote DV01 ladders for any pricer
 │   ├── swaps.py      RatesBlotter, SwapPosition, SwaptionPosition: NPV, PV01, DV01, vega, book ladder
 │   ├── futures.py    BasisScreen, Deliverable: CF, gross/net basis, carry, implied repo, CTD, switch option
 │   ├── vol.py        VolView, CapPosition: ATM grid, SABR per node, smiles, cap/floor strip
+│   ├── models.py     ModelView, BermudanPosition: Hull-White fit to the cube, Bermudan book, path check
 │   ├── fx.py         FxView, FxOptionPosition: forward points ladder, smile pillars, option book
 │   └── commod.py     CommodMarket (curves, vols, calendars, CS model), CommodPosition builders
 │                     (gas_swap, gas_basis_swap, transport, storage, swing, block_swap, heat_rate_option,
@@ -178,6 +197,8 @@ python
     ├── test_swaps.py    OIS legs and par rates, swaption goldens, implied vols, blotter
     ├── test_futures.py  conversion factors, basis, CTD, delivery option, SR3
     ├── test_vol.py      vol cube calibration, caps/floors vs QuantLib OvernightLeg + Bachelier engine
+    ├── test_models.py   Hull-White identities, tree and MC vs closed form, calibration; QuantLib ZCB options,
+    │                    Jamshidian and FD swaption engines, FD Bermudan
     ├── test_fx.py       dates, parity, Greeks; Garman-Kohlhagen and BlackDeltaCalculator vs QuantLib
     └── test_commod.py   date rules vs the Rust fixtures, pricing identities, the sample book
 ```

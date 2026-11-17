@@ -26,23 +26,24 @@ closed form).
 | Oil and products | `fq-oil` | WTI, Brent, RBOB, heating oil, gasoil: expiry rules and front-month rolls, calendar-month-average swaps and APOs, crack options and the 3-2-1, calendar spread options, contango carry |
 | Metals | `fq-metals` | Precious metals on USD and lease curves (forwards, GOFO, vanillas); LME prompt rules, prompt-keyed curves, forwards, carries, third-Wednesday options |
 | Agriculturals | `fq-ags` | Grains, oilseeds, softs and livestock with listed months and expiry rules, options, the soybean crush, full-carry benchmark, calendar spread options |
-| Python | `fq-py`, `python/fqview` | The whole library as the `ferrumquant` module; desk views on top: Treasury blotter, SOFR curve and par-quote risk, swap/swaption book, vol cube and caps, Treasury futures basis, FX forwards/smiles/option book, cross-commodity book |
+| Term-structure models | `fq-models` | Hull-White one-factor on any `DiscountCurve`: bonds, ZCB options, caplets on compounded SOFR, European swaptions in closed form, calibration to swaption normal vols, trinomial tree for Bermudans, exact short-rate simulation |
+| Python | `fq-py`, `python/fqview` | The whole library as the `ferrumquant` module; desk views on top: Treasury blotter, SOFR curve and par-quote risk, swap/swaption book, vol cube and caps, Treasury futures basis, Hull-White fit and Bermudan book, FX forwards/smiles/option book, cross-commodity book |
 
 ## Quick start
 
-````
+```
 git clone https://github.com/tembolo1284/ferrumquant && cd ferrumquant
 ./build.sh --clippy --fmt                  # fmt check, clippy -D warnings, cargo test --workspace
 ./build.sh --py all --with-quantlib        # venv, ferrumquant module, pytest, sample views
-./build.sh --py view -- rates 2026-11-09   # or: bonds | fx | commod | all
-````
+./build.sh --py view -- rates 2026-11-09   # or: bonds | models | fx | commod | all
+```
 
 Requirements: Rust 1.85+ (edition 2024); Python 3.9+ with `venv` for the
 bindings. `build.sh` runs on the bash 3.2 that ships with macOS. Current
-counts: 300 Rust tests across the nine library crates and 294 Python tests
+counts: 337 Rust tests across the ten library crates and 316 Python tests
 (QuantLib-Python cross-checks included; they skip when QuantLib is absent).
 
-````python
+```python
 import ferrumquant as fq
 
 today = "2026-11-09"
@@ -56,7 +57,11 @@ mkt = fq.FxMarket("EURUSD", today, 1.1750, eur, usd)
 surf = fq.FxVolSurface(mkt, [("1M", 0.072, -0.004, 0.0015), ("1Y", 0.080, -0.009, 0.0025, -0.0165, 0.008)])
 call = fq.FxVanilla.from_tenor("EURUSD", today, "6M", "call", 1.20, 10e6)
 print(surf.value(call)["pv_quote"], surf.vol_for_delta(call.expiry, "put", -0.25))
-````
+
+hw = fq.HullWhite(curve, 0.05, 0.01)
+berm = fq.BermudanSwaption.usd_sofr_coterminal("2027-11-09", "5Y", "payer", 100e6, 0.04)
+print(hw.european_swaption(fq.Swaption(berm.exercise_dates[0], "payer", berm.underlying)).pv, hw.bermudan_swaption(berm))
+```
 
 ## Documentation
 
@@ -65,7 +70,7 @@ print(surf.value(call)["pv_quote"], surf.vol_for_delta(call.expiry, "put", -0.25
 | [docs/building.md](docs/building.md) | `build.sh` options for Rust and Python, the venv, test selection by product, using the module from Python, the `fqview` desk layer |
 | [docs/layout.md](docs/layout.md) | Every crate and module with a one-line description |
 | [docs/design.md](docs/design.md) | Why there is no observer graph, how market data and risk are passed, error handling, thread safety |
-| [docs/finance.md](docs/finance.md) | The finance, module by module: day counts and calendars, Treasuries and futures, SOFR and OIS, curves and bootstrap, swaptions and caps, FX, each commodity sector, numerics |
+| [docs/finance.md](docs/finance.md) | The finance, module by module: day counts and calendars, Treasuries and futures, SOFR and OIS, curves and bootstrap, swaptions and caps, Hull-White, FX, each commodity sector, numerics |
 | [docs/validation.md](docs/validation.md) | What is checked against QuantLib, CME and exchange rules, and the roadmap |
 
 ## License

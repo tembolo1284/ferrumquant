@@ -37,16 +37,33 @@ Bachelier cap/floor engine; `test_fx.py` compares Garman-Kohlhagen prices,
 deltas, gammas and vegas with `AnalyticEuropeanEngine` and strike-from-delta
 and ATM strikes in all four delta conventions with `BlackDeltaCalculator`.
 
+Hull-White (`fq-models`) is checked three ways. Internally: the forward
+measure and the bank account reprice the curve; payer minus receiver equals
+the forward swap NPV from `fq-rates` to 1e-6; the closed-form swaption
+matches a numerical integration of the payoff to 1e-6; the tree's
+Arrow-Debreu prices reprice the curve to 1e-13 and a single-exercise
+Bermudan converges to the closed form (38,442 at 12 steps a year, 38,468 at
+400, closed form 38,463); exact simulation reproduces discount factors and
+`E[D(t) P(t,T)] = P(0,T)` within standard error; calibration recovers the
+generating `(a, sigma)` to 1e-7 and 1e-4. Against QuantLib: ZCB options match
+`HullWhite.discountBondOption` to 1e-12; European swaptions match
+`JamshidianSwaptionEngine` on a lag-free vanilla swap with the same dates to
+2e-6 (six goldens in `swaption.rs`). The lagged OIS is compared with
+`FdHullWhiteSwaptionEngine` instead, for Europeans and the Bermudan, with a
+tolerance of about 0.1bp of notional: the two-day payment lag is a
+deterministic factor here (as in `fq-rates`) and stochastic there. QuantLib's
+own Jamshidian engine misprices a lagged OIS by 0.7% and its tree engine
+ignores the lag, so neither is used as a reference for that case.
+
 # Roadmap
  
-1. `fq-models`: Hull-White one-factor (analytic bond options, calibration to
-   the swaption cube, trinomial tree and Monte Carlo), the base for the next two.
+1. `fq-models` extensions: two-factor (G2++), CMS convexity, swaption cash
+   settlement, a Least-Squares Monte Carlo path for callables.
 2. `fq-mbs`: agency pool cashflows, CPR/PSA and a refinancing-incentive
    prepayment model, OAS and option-adjusted duration/convexity.
 3. `fq-credit`: survival curves from CDS quotes (ISDA standard model
    conventions), CDS and index pricing, bond-CDS basis.
-4. Rates: separate projection and discount curves end to end, Bermudan
-   swaptions and CMS convexity on Hull-White, swaption cash settlement.
+4. Rates: separate projection and discount curves end to end.
 5. FX: cross-currency curves and XCCY swaps, barriers.
 6. Commodities: a Least-Squares Monte Carlo upper bound for storage and
    swing, multi-unit dispatch, LNG and freight, emissions.

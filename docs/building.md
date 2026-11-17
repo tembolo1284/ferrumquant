@@ -3,7 +3,7 @@
 Requirements: Rust 1.85+ (edition 2024), and for the Python side Python 3.9+
 with `venv`. `build.sh` works with the bash 3.2 that ships on macOS.
  
-````
+```
 ./build.sh                         # build + test every crate (dev profile)
 ./build.sh -r -b                   # release build only
 ./build.sh -p bond -p swaption     # tests for selected products
@@ -17,27 +17,28 @@ with `venv`. `build.sh` works with the bash 3.2 that ships on macOS.
 ./build.sh --py setup              # create .venv, install maturin and pytest
 ./build.sh --py build -r           # maturin develop the ferrumquant module into .venv
 ./build.sh --py test               # pytest python/tests
-./build.sh --py test -p py-fx      # one suite (py-bond, py-curve, py-swap, py-future, py-vol, py-fx, py-commod)
+./build.sh --py test -p py-fx      # one suite (py-bond, py-curve, py-swap, py-future, py-vol, py-models, py-fx, py-commod)
 ./build.sh --py view -- 2026-11-09 # every sample view
 ./build.sh --py view -- rates 2026-11-09          # SOFR curve, swap book, vol cube, futures basis
+./build.sh --py view -- models 2026-11-09         # Hull-White fit to the cube, Bermudan book, path check
 ./build.sh --py view -- fx 2026-11-09             # FX forwards, smiles and option book
 ./build.sh --py view -- commod 2026-11-09 2000   # the commodities book with 2000 MC paths
 ./build.sh --py all --with-quantlib              # venv, module, pytest (incl. QuantLib sweeps), blotter
 ./build.sh --py shell              # shell with the venv active and python/ on PYTHONPATH
-````
+```
  
 Products are module-path filters, so a test is "labelled" by where it lives.
 Adding a product is one line in `build.sh`. Plain `cargo build` and
 `cargo test` skip `fq-py` (it is not a default member); `--workspace`
 includes it.
  
-Current counts: 300 Rust tests across the nine library crates and 294 Python
+Current counts: 337 Rust tests across the ten library crates and 316 Python
 tests (parametrized QuantLib-Python cross-checks included; they skip when
 QuantLib is not installed).
 
 # Using it from Python
  
-````python
+```python
 import ferrumquant as fq
  
 ref = fq.Date(2026, 11, 9)
@@ -66,7 +67,7 @@ print(hro.value(power, hh, 0.5, vol, 0.6, disc)["extrinsic_pv"])
 lme = fq.LmeCalendar()
 cu = fq.LmeCurve("copper", ref, [(d, 9500.0) for d, k in lme.prompts("CA", ref, 15) if k in ("cash", "3m", "monthly")], lme)
 print(fq.LmeOption("call", "CA", 25, 9600.0, 2027, 6).value(cu, 0.22, disc, lme)["pv"])
-````
+```
  
 Conventions on the Python side:
  
@@ -87,11 +88,13 @@ Conventions on the Python side:
 once (with the Jacobian) and turns any Python pricer into a par-quote DV01
 ladder; `RatesBlotter` values swaps and swaptions and ladders the book;
 `BasisScreen` is the Treasury futures basis table; `VolView` shows the
-swaption cube, SABR smiles and a cap/floor strip; `FxView` prints forward
-points, smile pillars and an FX option book with Greeks in market
-conventions. On the commodity side `CommodMarket` carries curves, vols, calendars
-and the Monte Carlo model; a `CommodPosition` is a label plus a pricer
-closure; `CommodBook` prices the lot, bumps each position's outright curve by
-one cent for a delta column and totals by sector. `sample_commod_market` and
-`sample_commod_positions` build an 18-line book across gas, power, oil,
-metals and ags.
+swaption cube, SABR smiles and a cap/floor strip; `ModelView` calibrates
+Hull-White to the cube's ATM grid, prices a Bermudan book against the
+first-exercise Europeans and checks simulated paths against the curve;
+`FxView` prints forward points, smile pillars and an FX option book with
+Greeks in market conventions. On the commodity side `CommodMarket` carries
+curves, vols, calendars and the Monte Carlo model; a `CommodPosition` is a
+label plus a pricer closure; `CommodBook` prices the lot, bumps each
+position's outright curve by one cent for a delta column and totals by
+sector. `sample_commod_market` and `sample_commod_positions` build an
+18-line book across gas, power, oil, metals and ags.

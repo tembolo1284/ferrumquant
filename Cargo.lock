@@ -127,6 +127,7 @@ dependencies = [
  "fq-fx",
  "fq-gas",
  "fq-metals",
+ "fq-models",
  "fq-oil",
  "fq-power",
  "fq-rates",

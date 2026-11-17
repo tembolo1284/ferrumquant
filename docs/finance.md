@@ -182,6 +182,60 @@ SABR smile calibrated at each node, so an off-ATM strike gets a smile vol
 interpolated in expiry and tenor. `CapFloor` prices caplets and floorlets on
 compounded-in-arrears SOFR with the same Bachelier formula per period.
  
+## Hull-White (`fq-models`)
+ 
+The one-factor Hull-White model `dr = (theta(t) - a r) dt + sigma dW` fits
+any `DiscountCurve` by construction. The implementation never evaluates
+`theta` or the instantaneous forward curve: writing `r = x + alpha(t)` with
+`x` the zero-mean Ornstein-Uhlenbeck factor, every bond price is
+ 
+```
+P(t,T | x) = P(0,T)/P(0,t) exp(-B x - B y(t) - B^2 v(t)/2)
+B = (1 - e^{-a(T-t)})/a,  v(t) = sigma^2 (1 - e^{-2at})/(2a),  y(t) = sigma^2 (1 - e^{-at})^2/(2a^2)
+```
+ 
+which depends on the curve only through discount factors. Under the
+`T`-forward measure `x(T)` is Gaussian with mean `-y(T)` and variance `v(T)`,
+which prices anything paid at `T`. ZCB options are Jamshidian's closed form.
+A caplet on daily-compounded SOFR over `[s, e]` is the exchange of two
+lognormals, `exp(-int_0^s r)` against `(1 + K tau) exp(-int_0^e r)`, whose
+variance is the forward-looking `B(tau)^2 v(s)` plus the variance accrued
+inside the period; the forward-looking term-rate caplet is kept for
+comparison and is strictly cheaper.
+ 
+A European swaption's underlying, seen at expiry, is a sum of
+exponential-affine terms `c_k exp(-beta_k x)`: fixed coupons discount to
+their lagged payment dates, each floating payment is `N (P(T,s) - P(T,e))`
+times the deterministic lag factor `P(0,p)/P(0,e)` (the same treatment as
+`fq-rates`, so payer minus receiver equals the forward swap NPV exactly).
+Locating the exercise boundary `x*` with Brent turns the option into a sum
+of truncated-lognormal expectations: Jamshidian's decomposition on the
+swap's real dates rather than on a bullet bond. The result carries the
+implied Bachelier vol, so the model can be read against the cube.
+ 
+Calibration minimises vega-weighted price errors against swaption normal
+vols with Nelder-Mead in log coordinates, either `sigma` alone with `a`
+fixed (the usual desk choice) or both. A single `(a, sigma)` cannot reproduce
+a surface whose vols fall with tenor as fast as the sample cube does; the
+fit lands in the middle with a few bp of error, which is the model's known
+limitation rather than the fit's.
+ 
+Bermudans use the Hull-White trinomial tree on `x`: the branch from each
+node is centred on the node nearest the mean `x e^{-a dt}`, which truncates
+the lattice at `|j| = 1/(2 a dt)`, probabilities match the exact mean and
+variance per step, time steps are non-uniform so exercise dates land on
+slices, and the one-period discounts `exp(-(alpha_i + x_j) dt)` are fitted
+slice by slice through Arrow-Debreu prices so the tree reprices the curve.
+At an exercise node the swap value is the analytic affine sum for that
+node's factor, so a single-exercise Bermudan converges to the closed form.
+ 
+Simulation is exact: per step the pair `(x, int x)` is jointly Gaussian with
+closed-form covariance, so the bank account `P(0,t) exp(-int x - int y)` has
+no discretisation error and `E[D(t)] = P(0,t)`, `E[D(t) P(t,T|x)] = P(0,T)`
+hold in expectation. Bond prices along a path come from the same formula,
+which is what a prepayment model or a Least-Squares Monte Carlo callable
+needs.
+ 
 ## FX (`fq-fx`)
  
 An `FxMarket` is spot plus the two currencies' discount curves; the forward
@@ -342,3 +396,7 @@ carry. `AgCalendarSpread` is the option on the near/far spread.
   calibration to a smile.
 - `interpolation` provides linear and flat 1D and bilinear 2D interpolators
   with flat extrapolation, used by the vol cube and the FX surface.
+- `optim::nelder_mead` is a simplex minimiser in any dimension, used by the
+  Hull-White calibration; `rng` is a self-contained xoshiro256** with
+  Marsaglia polar Gaussians, so Monte Carlo paths are reproducible across
+  platforms with no external dependency.
